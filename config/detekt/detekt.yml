@@ -1,0 +1,27 @@
+# kemwork detekt overrides (merged over detekt defaults via buildUponDefaultConfig).
+config:
+  validation: false
+
+complexity:
+  LongParameterList:
+    # Configuration/builder objects and test fixtures legitimately take many params.
+    functionThreshold: 8
+    constructorThreshold: 12
+    ignoreDefaultParameters: true
+  ReturnCount:
+    active: false
+  TooManyFunctions:
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    # The client intentionally catches Throwable to map transport failures onto NetworkError.
+    active: false
+
+style:
+  MagicNumber:
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreNumbers: ['-1', '0', '1', '2', '100', '200', '299', '400', '401', '403', '404', '500']
+  MaxLineLength:
+    maxLineLength: 140
