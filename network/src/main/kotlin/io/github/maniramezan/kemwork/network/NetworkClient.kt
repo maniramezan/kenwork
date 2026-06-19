@@ -213,6 +213,7 @@ public class NetworkClient(
                     config {
                         config.okHttpCache?.let { cache(it) }
                         config.sslPinning?.let { certificatePinner(it.toCertificatePinner()) }
+                        config.okHttpConfig?.invoke(this)
                     }
                 }
             }

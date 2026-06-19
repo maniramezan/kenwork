@@ -4,6 +4,7 @@ import io.ktor.client.engine.HttpClientEngine
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 
 /** The default JSON codec: lenient and tolerant of unknown keys. */
 public val DefaultKemworkJson: Json =
@@ -23,6 +24,8 @@ public val DefaultKemworkJson: Json =
  * @property retryDelayMillis delay between a successful refresh and the retry.
  * @property logLevel verbosity of the Ktor request logger.
  * @property engineInterceptors OkHttp interceptors (e.g. an APITrace recorder) added to the engine.
+ * @property okHttpConfig escape hatch to configure the underlying [OkHttpClient.Builder] directly
+ *   (e.g. to install a bootstrap that needs the builder). Ignored when [engine] is set.
  * @property okHttpCache optional OkHttp disk cache honoring backend `Cache-Control`/`ETag`.
  * @property sslPinning optional certificate pinning.
  * @property engine optional explicit Ktor engine; when set, the OkHttp-specific options above are
@@ -37,6 +40,7 @@ public class NetworkClientConfiguration(
     public val retryDelayMillis: Long = DEFAULT_RETRY_DELAY_MILLIS,
     public val logLevel: LogLevel = LogLevel.WARNING,
     public val engineInterceptors: List<Interceptor> = emptyList(),
+    public val okHttpConfig: (OkHttpClient.Builder.() -> Unit)? = null,
     public val okHttpCache: Cache? = null,
     public val sslPinning: SslPinningConfiguration? = null,
     public val engine: HttpClientEngine? = null,
