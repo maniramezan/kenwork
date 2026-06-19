@@ -15,6 +15,12 @@ public class AndroidLibraryConventionPlugin : Plugin<Project> {
             configureAndroidLibrary(this)
         }
 
+        // The :testing module ships test utilities (no production logic of its own), so it is
+        // exempt from the coverage gate.
+        if (name != "testing") {
+            configureJacoco()
+        }
+
         tasks.withType(KotlinCompile::class.java).configureEach {
             val isTestCompilation = name.contains("UnitTest") || name.contains("AndroidTest")
             compilerOptions {

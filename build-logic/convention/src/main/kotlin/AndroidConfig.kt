@@ -19,6 +19,12 @@ internal fun Project.configureAndroidLibrary(extension: LibraryExtension) {
             targetCompatibility = JavaVersion.VERSION_17
         }
 
+        buildTypes {
+            getByName("debug") {
+                enableUnitTestCoverage = true
+            }
+        }
+
         // Robolectric-driven unit tests need Android resources on the test classpath;
         // returning default values keeps un-shadowed Android stubs (e.g. android.util.Log)
         // from throwing in plain JVM unit tests.
