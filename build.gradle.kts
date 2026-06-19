@@ -1,6 +1,6 @@
 plugins {
     alias(libs.plugins.detekt) apply false
-    alias(libs.plugins.dokka) apply false
+    alias(libs.plugins.dokka)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.jvm) apply false
@@ -12,6 +12,15 @@ plugins {
 
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     jvmTarget = "17"
+}
+
+// Aggregate the published modules' KDoc into a single Dokka HTML site (build/dokka/html)
+// via `./gradlew dokkaGenerate`.
+dependencies {
+    dokka(project(":network"))
+    dokka(project(":cache"))
+    dokka(project(":repository"))
+    dokka(project(":testing"))
 }
 
 subprojects {

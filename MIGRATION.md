@@ -1,0 +1,99 @@
+# Migrating an app onto kemwork
+
+This guide moves a hand-rolled Ktor + auth networking layer onto kemwork. It doubles as the script
+used to migrate Novalingo's `:core-network`.
+
+## 1. Depend on kemwork
+
+```kotlin
+// settings.gradle.kts (dev, before the first Maven Central release)
+dependencyResolutionManagement { repositories { mavenLocal(); google(); mavenCentral() } }
+
+// module build.gradle.kts
+implementation("io.github.maniramezan.kemwork:network:<version>")
+implementation("io.github.maniramezan.kemwork:cache:<version>")        // if used
+implementation("io.github.maniramezan.kemwork:repository:<version>")   // if used
+```
+
+Run `./gradlew publishToMavenLocal` in the kemwork repo to make `<version>` resolvable locally.
+
+## 2. Replace your auth token source with an `AuthorizationProvider`
+
+Make your existing token provider implement `AuthorizationProvider`:
+
+```kotlin
+class FirebaseAuthProvider(private val auth: FirebaseAuth) : AuthorizationProvider {
+    override suspend fun currentAuthorization(): AuthorizationType =
+        idToken(forceRefresh = false)?.let { AuthorizationType.Bearer(it) } ?: AuthorizationType.None
+    override suspend fun refreshAuthorizationIfNeeded(): Boolean =
+        idToken(forceRefresh = true) != null
+}
+```
+
+Delete any hand-written auth-header / 401-retry Ktor plugins — `NetworkClient` does this.
+
+## 3. Build `NetworkClient`s from configuration
+
+```kotlin
+val apiClient = NetworkClient(
+    NetworkClientConfiguration(
+        json = appJson,
+        authorizationProvider = firebaseAuthProvider,
+        okHttpCache = Cache(File(context.cacheDir, "api_http_cache"), 25L * 1024 * 1024),
+        engineInterceptors = listOf(apiTraceInterceptor),   // keep your recorder
+        eventListener = analyticsNetworkListener,            // your telemetry
+    ),
+)
+
+// Unauthenticated client for public CDN content: no provider, no auth headers.
+val contentClient = NetworkClient(NetworkClientConfiguration(json = appJson))
+```
+
+## 4. Express endpoints as `NetworkEndpoint`, keep your DTOs
+
+Route your existing API methods through `NetworkClient`, leaving DTOs and domain mappers untouched:
+
+```kotlin
+private data class GetVideoEndpoint(val id: Int) : NetworkEndpoint {
+    override val baseUrl = environment.baseUrl
+    override val path = "v1/youtube/videos/$id/"
+    override val method = HttpMethod.GET
+}
+
+suspend fun getVideo(id: Int): Video =
+    apiClient.request<VideoDto>(GetVideoEndpoint(id)).toModel()
+```
+
+Keep the public signatures of your API facade unchanged so feature code and tests don't move.
+Migrate endpoint group by group (e.g. videos → categories → profile → sync → feedback).
+
+## 5. Wire telemetry
+
+Implement `NetworkEventListener` to forward `NetworkEvent`s to your analytics, and pass it in the
+configuration. Your analytics module stays where it is.
+
+## 6. Keep DI thin
+
+kemwork is DI-free. Provide its objects from a small Hilt/Koin module:
+
+```kotlin
+@Provides @Singleton
+fun provideApiClient(provider: AuthorizationProvider, json: Json): NetworkClient =
+    NetworkClient(NetworkClientConfiguration(json = json, authorizationProvider = provider))
+```
+
+## 7. Delete the duplicated plumbing
+
+Remove the in-repo auth plugins, tracing wiring you replaced, and any bespoke error mapping now
+covered by `NetworkError`. Keep app-specific recorders (e.g. APITrace) and pass them via
+`engineInterceptors`.
+
+## 8. Verify
+
+```bash
+./gradlew :core-network:test
+./gradlew :app:assembleProdDebug
+```
+
+Smoke test: a cold-start guest request authenticates; forcing a `401` triggers refresh-and-retry;
+the request recorder still captures traffic.
