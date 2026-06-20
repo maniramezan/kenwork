@@ -1,8 +1,8 @@
 # Architecture
 
-kemwork mirrors [SwiftyNetwork](https://github.com/maniramezan/SwiftyNetwork)'s design in
+kenwork mirrors [SwiftyNetwork](https://github.com/maniramezan/SwiftyNetwork)'s design in
 idiomatic Kotlin. "Parity" means the two libraries expose the same concepts — not a shared
-binary. iOS stays on SwiftyNetwork (Swift/URLSession); kemwork targets Android/JVM on
+binary. iOS stays on SwiftyNetwork (Swift/URLSession); kenwork targets Android/JVM on
 Ktor + OkHttp.
 
 ## Layering
@@ -31,7 +31,7 @@ Ktor HttpClient → OkHttp engine (interceptors, disk cache, CertificatePinner)
 Everything is `suspend`-based; there are no callbacks. Swift Concurrency constructs map to Kotlin
 coroutines as follows:
 
-| SwiftyNetwork (Swift) | kemwork (Kotlin) |
+| SwiftyNetwork (Swift) | kenwork (Kotlin) |
 |---|---|
 | `actor` (isolated mutable state) | `Mutex` guarding the state (`InMemoryCache`, `OAuthAuthorizationProvider`, `NetworkClient`) |
 | `async`/`await` | `suspend` functions |
@@ -56,7 +56,7 @@ up to `maxAuthRefreshAttempts` (default 1). If refresh fails it throws
 
 ## Why Ktor + OkHttp (and not KMP)
 
-The OkHttp engine lets kemwork reuse a mature ecosystem directly: `Interceptor`s (e.g. an APITrace
+The OkHttp engine lets kenwork reuse a mature ecosystem directly: `Interceptor`s (e.g. an APITrace
 recorder), the 304-aware disk `Cache`, and `CertificatePinner` for pinning. A full Kotlin
 Multiplatform build's only extra benefit would be an iOS target — already served by SwiftyNetwork —
 at the cost of `expect/actual` for pinning, connectivity, caching, and tracing. The modules are
@@ -64,7 +64,7 @@ layered so a future KMP lift remains possible.
 
 ## Zero dependency injection
 
-Like SwiftyNetwork (plain initializers + a `Configuration`), kemwork ships **no DI framework
+Like SwiftyNetwork (plain initializers + a `Configuration`), kenwork ships **no DI framework
 dependency**. Consumers construct objects directly or wire them with their own DI (Hilt/Koin).
 `NetworkClient.shared` offers a process-wide default.
 

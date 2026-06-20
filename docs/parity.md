@@ -1,10 +1,10 @@
-# SwiftyNetwork ↔ kemwork parity
+# SwiftyNetwork ↔ kenwork parity
 
-kemwork is the Kotlin counterpart of [SwiftyNetwork](https://github.com/maniramezan/SwiftyNetwork).
+kenwork is the Kotlin counterpart of [SwiftyNetwork](https://github.com/maniramezan/SwiftyNetwork).
 This table maps each public type/behavior between the two libraries. It also serves as a checklist
 for the parity tests in `:network`, `:cache`, and `:repository`.
 
-| Concept | SwiftyNetwork (Swift) | kemwork (Kotlin) |
+| Concept | SwiftyNetwork (Swift) | kenwork (Kotlin) |
 |---|---|---|
 | HTTP methods | `HTTPMethod` | `HttpMethod` |
 | Endpoint | `NetworkEndpoint` protocol | `NetworkEndpoint` interface |
@@ -28,13 +28,13 @@ for the parity tests in `:network`, `:cache`, and `:repository`.
 | Connectivity | `NetworkMonitor` (`NWPathMonitor`, `AsyncStream`) | `NetworkMonitor` (`ConnectivityManager`, `StateFlow`) |
 | Reachability | `NetworkReachability` | `NetworkReachability` |
 | TLS pinning | `SSLPinningConfiguration` | `SslPinningConfiguration` (OkHttp `CertificatePinner`) |
-| Logging | `Logger` / `LogLevel` | `KemworkLogger` / `LogLevel` / `LogSink` |
+| Logging | `Logger` / `LogLevel` | `KenworkLogger` / `LogLevel` / `LogSink` |
 
 ## Intentional differences
 
-- **Telemetry:** kemwork adds `NetworkEventListener`/`NetworkEvent` (ported from Novalingo's
+- **Telemetry:** kenwork adds `NetworkEventListener`/`NetworkEvent` (ported from Novalingo's
   network telemetry) so analytics can be wired without a DI framework.
-- **Timestamps:** kemwork uses epoch-millisecond `Long` where SwiftyNetwork uses `Date`.
-- **Reified requests:** kemwork exposes `request<T>()` / `request<B, T>(body)` extensions instead of
+- **Timestamps:** kenwork uses epoch-millisecond `Long` where SwiftyNetwork uses `Date`.
+- **Reified requests:** kenwork exposes `request<T>()` / `request<B, T>(body)` extensions instead of
   passing a `responseType:` argument.
 - **`AnyCache`:** kept for symmetry, but Kotlin generics don't require Swift-style type erasure.

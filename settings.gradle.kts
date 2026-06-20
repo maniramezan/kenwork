@@ -18,7 +18,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "kemwork"
+rootProject.name = "kenwork"
 
 include(":network")
 include(":cache")

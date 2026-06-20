@@ -1,5 +1,5 @@
 plugins {
-    alias(libs.plugins.kemwork.android.library)
+    alias(libs.plugins.kenwork.android.library)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -7,7 +7,7 @@ group = providers.gradleProperty("GROUP").get()
 version = providers.gradleProperty("VERSION_NAME").get()
 
 android {
-    namespace = "io.github.maniramezan.kemwork.network"
+    namespace = "io.github.maniramezan.kenwork.network"
 }
 
 dependencies {

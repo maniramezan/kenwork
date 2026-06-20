@@ -1,4 +1,4 @@
-# Releasing kemwork
+# Releasing kenwork
 
 Releases are fully automated with [release-please](https://github.com/googleapis/release-please)
 and the [vanniktech maven-publish](https://github.com/vanniktech/gradle-maven-publish-plugin)
