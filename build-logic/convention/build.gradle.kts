@@ -10,11 +10,11 @@ dependencies {
 gradlePlugin {
     plugins {
         register("androidLibrary") {
-            id = "kemwork.android.library"
+            id = "kenwork.android.library"
             implementationClass = "AndroidLibraryConventionPlugin"
         }
         register("kotlinLibrary") {
-            id = "kemwork.kotlin.library"
+            id = "kenwork.kotlin.library"
             implementationClass = "KotlinLibraryConventionPlugin"
         }
     }
