@@ -1,21 +1,21 @@
-# Migrating an app onto kemwork
+# Migrating an app onto kenwork
 
-This guide moves a hand-rolled Ktor + auth networking layer onto kemwork. It doubles as the script
+This guide moves a hand-rolled Ktor + auth networking layer onto kenwork. It doubles as the script
 used to migrate Novalingo's `:core-network`.
 
-## 1. Depend on kemwork
+## 1. Depend on kenwork
 
 ```kotlin
 // settings.gradle.kts (dev, before the first Maven Central release)
 dependencyResolutionManagement { repositories { mavenLocal(); google(); mavenCentral() } }
 
 // module build.gradle.kts
-implementation("io.github.maniramezan.kemwork:network:<version>")
-implementation("io.github.maniramezan.kemwork:cache:<version>")        // if used
-implementation("io.github.maniramezan.kemwork:repository:<version>")   // if used
+implementation("io.github.maniramezan.kenwork:network:<version>")
+implementation("io.github.maniramezan.kenwork:cache:<version>")        // if used
+implementation("io.github.maniramezan.kenwork:repository:<version>")   // if used
 ```
 
-Run `./gradlew publishToMavenLocal` in the kemwork repo to make `<version>` resolvable locally.
+Run `./gradlew publishToMavenLocal` in the kenwork repo to make `<version>` resolvable locally.
 
 ## 2. Replace your auth token source with an `AuthorizationProvider`
 
@@ -74,7 +74,7 @@ configuration. Your analytics module stays where it is.
 
 ## 6. Keep DI thin
 
-kemwork is DI-free. Provide its objects from a small Hilt/Koin module:
+kenwork is DI-free. Provide its objects from a small Hilt/Koin module:
 
 ```kotlin
 @Provides @Singleton

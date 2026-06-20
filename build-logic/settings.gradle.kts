@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "kemwork-build-logic"
+rootProject.name = "kenwork-build-logic"
 include(":convention")

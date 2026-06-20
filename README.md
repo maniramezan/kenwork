@@ -1,7 +1,7 @@
-# kemwork
+# kenwork
 
 A Kotlin-first networking library for Android — typed endpoints, a coroutine HTTP client with
-automatic OAuth refresh, layered caching, and a repository abstraction. **kemwork is the Kotlin
+automatic OAuth refresh, layered caching, and a repository abstraction. **kenwork is the Kotlin
 counterpart of [SwiftyNetwork](https://github.com/maniramezan/SwiftyNetwork)**: the two libraries
 expose the same concepts with idiomatic APIs on each platform.
 
@@ -12,19 +12,19 @@ free (plain constructors + a `Configuration` object).
 
 | Artifact | What it provides |
 |---|---|
-| `io.github.maniramezan.kemwork:network` | `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `NetworkError`, `NetworkMonitor`, `SslPinningConfiguration`, `KemworkLogger`, `NetworkEventListener` |
-| `io.github.maniramezan.kemwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `LayeredCache`, `CachePolicy`, `CacheKey` |
-| `io.github.maniramezan.kemwork:repository` | `Repository`/`GenericRepository`, `LocalDataSource`/`CacheBasedLocalDataSource` |
-| `io.github.maniramezan.kemwork:testing` | `MockEngine` client builder, fakes, recording listener for consumer tests |
+| `io.github.maniramezan.kenwork:network` | `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `NetworkError`, `NetworkMonitor`, `SslPinningConfiguration`, `KenworkLogger`, `NetworkEventListener` |
+| `io.github.maniramezan.kenwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `LayeredCache`, `CachePolicy`, `CacheKey` |
+| `io.github.maniramezan.kenwork:repository` | `Repository`/`GenericRepository`, `LocalDataSource`/`CacheBasedLocalDataSource` |
+| `io.github.maniramezan.kenwork:testing` | `MockEngine` client builder, fakes, recording listener for consumer tests |
 
 ## Install
 
 ```kotlin
 dependencies {
-    implementation("io.github.maniramezan.kemwork:network:0.1.0")
-    implementation("io.github.maniramezan.kemwork:cache:0.1.0")        // optional
-    implementation("io.github.maniramezan.kemwork:repository:0.1.0")   // optional
-    testImplementation("io.github.maniramezan.kemwork:testing:0.1.0")  // optional
+    implementation("io.github.maniramezan.kenwork:network:0.1.0")
+    implementation("io.github.maniramezan.kenwork:cache:0.1.0")        // optional
+    implementation("io.github.maniramezan.kenwork:repository:0.1.0")   // optional
+    testImplementation("io.github.maniramezan.kenwork:testing:0.1.0")  // optional
 }
 ```
 
@@ -70,15 +70,15 @@ A `401` automatically triggers a single coalesced token refresh and one retry.
 - Caching: `InMemoryCache` (LRU + expiry), `LayeredCache` (memory + persistent with timestamp
   promotion), `CachePolicy`.
 - `GenericRepository` coordinating network + cache with write-through.
-- `NetworkMonitor` connectivity (`Flow`), OkHttp `SslPinningConfiguration`, `KemworkLogger`,
+- `NetworkMonitor` connectivity (`Flow`), OkHttp `SslPinningConfiguration`, `KenworkLogger`,
   and a `NetworkEventListener` telemetry hook.
 
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — layering & concurrency model.
 - [docs/cookbook.md](docs/cookbook.md) — task-oriented recipes.
-- [docs/parity.md](docs/parity.md) — SwiftyNetwork ↔ kemwork mapping.
-- [MIGRATION.md](MIGRATION.md) — moving an existing Ktor/auth layer onto kemwork.
+- [docs/parity.md](docs/parity.md) — SwiftyNetwork ↔ kenwork mapping.
+- [MIGRATION.md](MIGRATION.md) — moving an existing Ktor/auth layer onto kenwork.
 - [docs/release.md](docs/release.md) — how releases reach Maven Central.
 - API reference (Dokka): published to GitHub Pages on each release.
 

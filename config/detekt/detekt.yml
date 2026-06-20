@@ -1,4 +1,4 @@
-# kemwork detekt overrides (merged over detekt defaults via buildUponDefaultConfig).
+# kenwork detekt overrides (merged over detekt defaults via buildUponDefaultConfig).
 config:
   validation: false
 

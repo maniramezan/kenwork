@@ -1,6 +1,6 @@
 # Cookbook
 
-Task-oriented recipes. All snippets assume `import io.github.maniramezan.kemwork.network.*`
+Task-oriented recipes. All snippets assume `import io.github.maniramezan.kenwork.network.*`
 (and `.cache.*` / `.repository.*` where relevant).
 
 ## Define endpoints
@@ -130,14 +130,14 @@ val client = NetworkClient(NetworkClientConfiguration(
 ## Logging
 
 ```kotlin
-KemworkLogger.level = LogLevel.DEBUG
-KemworkLogger.sink = LogSink { level, category, message, t -> Timber.log(/* ... */) }
+KenworkLogger.level = LogLevel.DEBUG
+KenworkLogger.sink = LogSink { level, category, message, t -> Timber.log(/* ... */) }
 ```
 
 ## Testing (with the `:testing` module)
 
 ```kotlin
-import io.github.maniramezan.kemwork.testing.*
+import io.github.maniramezan.kenwork.testing.*
 
 @Test fun loadsVideo() = runBlocking {
     val client = mockNetworkClient { jsonResponse("""{"id":42,"title":"Hi"}""") }
