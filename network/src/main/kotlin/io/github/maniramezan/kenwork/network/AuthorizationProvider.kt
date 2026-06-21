@@ -5,6 +5,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -65,5 +66,13 @@ public class OAuthAuthorizationProvider(
         val newToken = refreshTokenHandler() ?: return false
         mutex.withLock { accessToken = newToken }
         return true
+    }
+
+    /**
+     * Cancels the internal coroutine scope used to coalesce refreshes. Call when the provider is
+     * discarded; any in-flight refresh is cancelled and subsequent refreshes will fail.
+     */
+    public fun close() {
+        scope.cancel()
     }
 }
