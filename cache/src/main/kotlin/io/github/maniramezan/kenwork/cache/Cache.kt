@@ -1,5 +1,35 @@
 package io.github.maniramezan.kenwork.cache
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+
+/** A cached [value] together with the epoch-millisecond [timestamp] it was stored at. */
+public data class CacheEntry<V : Any>(
+    public val value: V,
+    public val timestamp: Long,
+)
+
+/**
+ * A mutation observed on a [Cache], emitted by [Cache.changes].
+ *
+ * Lets reactive consumers (e.g. a repository `stream`) re-read only the keys that actually
+ * changed instead of polling.
+ */
+public sealed interface CacheChange {
+    /** The value stored for [key] was set or replaced. */
+    public data class Updated(
+        public val key: CacheKey,
+    ) : CacheChange
+
+    /** The value stored for [key] was removed (explicitly or by eviction/expiry). */
+    public data class Removed(
+        public val key: CacheKey,
+    ) : CacheChange
+
+    /** Every entry was removed. */
+    public data object Cleared : CacheChange
+}
+
 /**
  * An asynchronous key-value cache.
  *
@@ -27,6 +57,25 @@ public interface Cache<V : Any> {
 
     /** Returns the epoch-millisecond timestamp recorded for [key], or `null` if absent. */
     public suspend fun timestamp(key: CacheKey): Long?
+
+    /**
+     * Atomically returns the value **and** its timestamp for [key], or `null` if absent.
+     *
+     * Prefer this over separate [value]/[timestamp] calls when both are needed: a single lookup
+     * cannot observe a value and a timestamp from two different writes. The default implementation
+     * composes [value] and [timestamp] and is therefore **not** atomic; thread-safe caches should
+     * override it.
+     */
+    public suspend fun entry(key: CacheKey): CacheEntry<V>? {
+        val value = value(key) ?: return null
+        return timestamp(key)?.let { CacheEntry(value, it) }
+    }
+
+    /**
+     * A hot stream of [CacheChange]s for this cache. The default is an empty flow, so caches that
+     * cannot observe mutations are simply non-reactive; observable caches override this.
+     */
+    public fun changes(): Flow<CacheChange> = emptyFlow()
 }
 
 /**

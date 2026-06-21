@@ -11,4 +11,12 @@ public enum class HttpMethod(
     PATCH("PATCH"),
     DELETE("DELETE"),
     OPTIONS("OPTIONS"),
+    ;
+
+    /**
+     * Whether this method is idempotent (safe to transparently retry). Per RFC 7231 every method
+     * except [POST] and [PATCH] is idempotent.
+     */
+    public val isIdempotent: Boolean
+        get() = this != POST && this != PATCH
 }

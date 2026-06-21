@@ -25,6 +25,7 @@ import kotlinx.coroutines.sync.withLock
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import kotlin.random.Random
 import io.ktor.client.plugins.logging.LogLevel as KtorLogLevel
 import io.ktor.client.plugins.logging.Logger as KtorLogger
 import io.ktor.http.HttpMethod as KtorHttpMethod
@@ -40,22 +41,37 @@ import io.ktor.http.HttpMethod as KtorHttpMethod
  * 4. Map non-2xx and transport failures to [NetworkError].
  * 5. Decode the success body into the requested type.
  *
- * Thread-safe: the mutable [configuration]/[httpClient] pair is guarded by a [Mutex].
+ * Thread-safe: the mutable configuration/client pair is guarded by a [Mutex], and the active
+ * client is reference-counted so [updateConfiguration] never closes a client mid-request.
  */
 public class NetworkClient(
     configuration: NetworkClientConfiguration = NetworkClientConfiguration(),
 ) : NetworkDataSource {
+    /** A reference-counted [HttpClient] so reconfiguration can wait for in-flight calls to drain. */
+    private class ClientHolder(
+        val client: HttpClient,
+    ) {
+        var refCount: Int = 0
+    }
+
     private val mutex = Mutex()
     private var configuration: NetworkClientConfiguration = configuration
-    private var httpClient: HttpClient = buildClient(configuration)
+    private var holder: ClientHolder = ClientHolder(buildClient(configuration))
 
-    /** Swaps in a new [NetworkClientConfiguration], rebuilding the underlying engine. */
+    /**
+     * Swaps in a new [NetworkClientConfiguration], rebuilding the underlying engine. The previous
+     * client is closed only once its in-flight requests complete, so reconfiguring mid-request is
+     * safe.
+     */
     public suspend fun updateConfiguration(newConfiguration: NetworkClientConfiguration) {
-        mutex.withLock {
-            httpClient.close()
-            configuration = newConfiguration
-            httpClient = buildClient(newConfiguration)
-        }
+        val toClose =
+            mutex.withLock {
+                val previous = holder
+                configuration = newConfiguration
+                holder = ClientHolder(buildClient(newConfiguration))
+                previous.takeIf { it.refCount == 0 }
+            }
+        toClose?.client?.close()
     }
 
     override suspend fun <T> request(
@@ -64,36 +80,98 @@ public class NetworkClient(
         bodyType: TypeInfo?,
         responseType: TypeInfo,
     ): T {
-        val client: HttpClient
-        val config: NetworkClientConfiguration
-        mutex.withLock {
-            client = httpClient
-            config = configuration
-        }
+        val acquired =
+            mutex.withLock {
+                holder.also { it.refCount++ } to configuration
+            }
+        val activeHolder = acquired.first
+        val config = acquired.second
         val startNs = System.nanoTime()
         try {
-            val response = executeWithAuth(client, config, endpoint, body, bodyType)
-            val validated = validateOrThrow(response)
-            config.eventListener?.onEvent(
-                NetworkEvent(
-                    endpointId = endpoint.endpointId(),
-                    method = endpoint.method.value,
-                    durationMs = elapsedMs(startNs),
-                    statusCode = validated.status.value,
-                ),
-            )
             @Suppress("UNCHECKED_CAST")
-            return decodeBody(validated, responseType) as T
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: NetworkError) {
-            config.eventListener?.onEvent(error.toEvent(endpoint, elapsedMs(startNs)))
-            throw error
-        } catch (error: Throwable) {
-            val mapped = mapException(error)
+            return attemptWithRetry(activeHolder.client, config, endpoint, body, bodyType, responseType, startNs) as T
+        } finally {
+            release(activeHolder)
+        }
+    }
+
+    /** Runs the request, retrying transient failures per [NetworkClientConfiguration]. */
+    private suspend fun attemptWithRetry(
+        client: HttpClient,
+        config: NetworkClientConfiguration,
+        endpoint: NetworkEndpoint,
+        body: Any?,
+        bodyType: TypeInfo?,
+        responseType: TypeInfo,
+        startNs: Long,
+    ): Any? {
+        var attempt = 0
+        while (true) {
+            val mapped: NetworkError =
+                try {
+                    val response = executeWithAuth(client, config, endpoint, body, bodyType)
+                    val validated = validateOrThrow(response)
+                    config.eventListener?.onEvent(
+                        NetworkEvent(
+                            endpointId = endpoint.endpointId(),
+                            method = endpoint.method.value,
+                            durationMs = elapsedMs(startNs),
+                            statusCode = validated.status.value,
+                        ),
+                    )
+                    return decodeBody(validated, responseType)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: NetworkError) {
+                    error
+                } catch (error: Throwable) {
+                    mapException(error)
+                }
+            if (shouldRetryTransient(mapped, endpoint.method, config, attempt)) {
+                attempt++
+                delay(backoffMillis(attempt, config))
+                continue
+            }
             config.eventListener?.onEvent(mapped.toEvent(endpoint, elapsedMs(startNs)))
             throw mapped
         }
+    }
+
+    /** Whether [error] is a transient failure eligible for another attempt. */
+    private fun shouldRetryTransient(
+        error: NetworkError,
+        method: HttpMethod,
+        config: NetworkClientConfiguration,
+        attempt: Int,
+    ): Boolean {
+        val transient =
+            when (error) {
+                NetworkError.Timeout, NetworkError.NoInternetConnection -> true
+                is NetworkError.ServerError -> error.statusCode >= HTTP_SERVER_ERROR
+                else -> false
+            }
+        val methodAllowed = method.isIdempotent || config.retryNonIdempotent
+        return attempt < config.maxTransientRetries && methodAllowed && transient
+    }
+
+    /** Exponential backoff with full jitter, capped at [NetworkClientConfiguration.retryBackoffMaxMillis]. */
+    private fun backoffMillis(
+        attempt: Int,
+        config: NetworkClientConfiguration,
+    ): Long {
+        val shift = (attempt - 1).coerceIn(0, MAX_BACKOFF_SHIFT)
+        val ceiling = (config.retryBackoffBaseMillis shl shift).coerceAtMost(config.retryBackoffMaxMillis)
+        return Random.nextLong(ceiling + 1)
+    }
+
+    /** Releases a held client, closing it if it has been superseded and is now idle. */
+    private suspend fun release(activeHolder: ClientHolder) {
+        val toClose =
+            mutex.withLock {
+                activeHolder.refCount--
+                activeHolder.takeIf { it !== holder && it.refCount == 0 }
+            }
+        toClose?.client?.close()
     }
 
     private suspend fun executeWithAuth(
@@ -229,6 +307,8 @@ public class NetworkClient(
         private const val HTTP_UNAUTHORIZED = 401
         private const val HTTP_FORBIDDEN = 403
         private const val HTTP_NOT_FOUND = 404
+        private const val HTTP_SERVER_ERROR = 500
+        private const val MAX_BACKOFF_SHIFT = 16
         private const val NANOS_PER_MILLI = 1_000_000L
     }
 
