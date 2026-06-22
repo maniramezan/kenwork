@@ -60,9 +60,13 @@ fun MockRequestHandleScope.json(
     status: HttpStatusCode = HttpStatusCode.OK,
 ): HttpResponseData = respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
 
+@Suppress("LongParameterList")
 fun testClient(
     authorizationProvider: AuthorizationProvider? = null,
     maxAuthRefreshAttempts: Int = 1,
+    maxTransientRetries: Int = 0,
+    retryNonIdempotent: Boolean = false,
+    retryBackoffBaseMillis: Long = 0,
     eventListener: NetworkEventListener? = null,
     handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
 ): NetworkClient =
@@ -70,6 +74,9 @@ fun testClient(
         NetworkClientConfiguration(
             authorizationProvider = authorizationProvider,
             maxAuthRefreshAttempts = maxAuthRefreshAttempts,
+            maxTransientRetries = maxTransientRetries,
+            retryNonIdempotent = retryNonIdempotent,
+            retryBackoffBaseMillis = retryBackoffBaseMillis,
             retryDelayMillis = 0,
             engine = MockEngine(handler),
             eventListener = eventListener,

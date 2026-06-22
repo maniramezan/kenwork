@@ -36,9 +36,43 @@ coroutines as follows:
 | `actor` (isolated mutable state) | `Mutex` guarding the state (`InMemoryCache`, `OAuthAuthorizationProvider`, `NetworkClient`) |
 | `async`/`await` | `suspend` functions |
 | `Task<Bool, Never>` (coalesced refresh) | `Deferred<Boolean>` stored under a `Mutex` |
-| `AsyncStream<T>` | `StateFlow<T>` (`NetworkMonitor.updates`) |
+| `AsyncStream<T>` | `StateFlow<T>` (`NetworkMonitor.updates`); `SharedFlow<CacheChange>` (`Cache.changes`) |
 | `Task.sleep` | `delay` |
 | `Sendable` | immutable data classes / `Mutex`-guarded state |
+
+### Coalesced repository loads (single-flight)
+
+`GenericRepository` deduplicates concurrent cache-miss loads for the same `CacheKey`: the first
+caller starts a single `Deferred` on the repository's scope, registered under a `Mutex`; the rest
+await it. One network request serves the whole burst — the same pattern as the auth refresh above.
+Pass your own `CoroutineScope` to tie those loads to a lifecycle you own (otherwise an internal
+`SupervisorJob` is created and `close()` cancels it).
+
+### Atomic cache reads
+
+`Cache.entry(key)` / `LocalDataSource.entry(key)` return value **and** timestamp under a single lock
+so a freshness check can't observe a value and a timestamp written by two different operations. The
+default composes `value`/`timestamp` (non-atomic); `InMemoryCache` and `LayeredCache` override it.
+
+### Reactive data layer
+
+Beyond `NetworkMonitor`, the data layer is observable: `Cache.changes()` /
+`LocalDataSource.changes()` emit a `CacheChange` (`Updated`/`Removed`/`Cleared`) on every mutation
+(read-time LRU promotion does **not** emit). `Repository.stream(endpoint, key, policy)` emits an
+initial `fetch`, then re-emits the stored value whenever the local store reports a change for that
+key (`distinctUntilChanged`), giving an offline-first single-source-of-truth stream for UIs.
+
+## Resilience: transient retry
+
+`NetworkClient` retries transient failures — `Timeout`, `NoInternetConnection`, and `5xx`
+`ServerError` — up to `maxTransientRetries` (default 2) with exponential backoff and full jitter
+(`retryBackoffBaseMillis` → `retryBackoffMaxMillis`). Only **idempotent** methods are retried unless
+`retryNonIdempotent` is set, so a `POST`/`PATCH` is never transparently replayed by default. This is
+distinct from the `401` refresh-and-retry path above.
+
+`updateConfiguration` reference-counts the active `HttpClient`, so a config swap never closes a
+client out from under an in-flight request; the superseded client closes once its last request
+drains.
 
 ### Coalesced auth refresh
 
