@@ -13,6 +13,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.readRawBytes
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.takeFrom
@@ -25,7 +26,8 @@ import kotlinx.coroutines.sync.withLock
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import kotlin.random.Random
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import io.ktor.client.plugins.logging.LogLevel as KtorLogLevel
 import io.ktor.client.plugins.logging.Logger as KtorLogger
 import io.ktor.http.HttpMethod as KtorHttpMethod
@@ -117,6 +119,7 @@ public class NetworkClient(
                             method = endpoint.method.value,
                             durationMs = elapsedMs(startNs),
                             statusCode = validated.status.value,
+                            attempt = attempt,
                         ),
                     )
                     return decodeBody(validated, responseType)
@@ -127,41 +130,12 @@ public class NetworkClient(
                 } catch (error: Throwable) {
                     mapException(error)
                 }
-            if (shouldRetryTransient(mapped, endpoint.method, config, attempt)) {
-                attempt++
-                delay(backoffMillis(attempt, config))
-                continue
-            }
-            config.eventListener?.onEvent(mapped.toEvent(endpoint, elapsedMs(startNs)))
-            throw mapped
+            val delayMillis = config.retryPolicy.retryDelayMillis(attempt + 1, endpoint.method, mapped)
+            config.eventListener?.onEvent(mapped.toEvent(endpoint, elapsedMs(startNs), attempt))
+            if (delayMillis == null) throw mapped
+            attempt++
+            if (delayMillis > 0) delay(delayMillis)
         }
-    }
-
-    /** Whether [error] is a transient failure eligible for another attempt. */
-    private fun shouldRetryTransient(
-        error: NetworkError,
-        method: HttpMethod,
-        config: NetworkClientConfiguration,
-        attempt: Int,
-    ): Boolean {
-        val transient =
-            when (error) {
-                NetworkError.Timeout, NetworkError.NoInternetConnection -> true
-                is NetworkError.ServerError -> error.statusCode >= HTTP_SERVER_ERROR
-                else -> false
-            }
-        val methodAllowed = method.isIdempotent || config.retryNonIdempotent
-        return attempt < config.maxTransientRetries && methodAllowed && transient
-    }
-
-    /** Exponential backoff with full jitter, capped at [NetworkClientConfiguration.retryBackoffMaxMillis]. */
-    private fun backoffMillis(
-        attempt: Int,
-        config: NetworkClientConfiguration,
-    ): Long {
-        val shift = (attempt - 1).coerceIn(0, MAX_BACKOFF_SHIFT)
-        val ceiling = (config.retryBackoffBaseMillis shl shift).coerceAtMost(config.retryBackoffMaxMillis)
-        return Random.nextLong(ceiling + 1)
     }
 
     /** Releases a held client, closing it if it has been superseded and is now idle. */
@@ -237,7 +211,21 @@ public class NetworkClient(
             HTTP_UNAUTHORIZED -> NetworkError.Unauthorized
             HTTP_FORBIDDEN -> NetworkError.Forbidden
             HTTP_NOT_FOUND -> NetworkError.NotFound
-            else -> NetworkError.ServerError(code, bytes)
+            else -> NetworkError.ServerError(code, bytes, parseRetryAfter(response))
+        }
+    }
+
+    /** Parses a `Retry-After` header (delta-seconds or an HTTP date) into a non-negative delay. */
+    private fun parseRetryAfter(response: HttpResponse): Long? {
+        val raw = response.headers[HttpHeaders.RetryAfter]?.trim() ?: return null
+        val seconds = raw.toLongOrNull()
+        return if (seconds != null) {
+            (seconds * MILLIS_PER_SECOND).coerceAtLeast(0)
+        } else {
+            runCatching {
+                val target = ZonedDateTime.parse(raw, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
+                (target - System.currentTimeMillis()).coerceAtLeast(0)
+            }.getOrNull()
         }
     }
 
@@ -307,9 +295,8 @@ public class NetworkClient(
         private const val HTTP_UNAUTHORIZED = 401
         private const val HTTP_FORBIDDEN = 403
         private const val HTTP_NOT_FOUND = 404
-        private const val HTTP_SERVER_ERROR = 500
-        private const val MAX_BACKOFF_SHIFT = 16
         private const val NANOS_PER_MILLI = 1_000_000L
+        private const val MILLIS_PER_SECOND = 1_000L
     }
 
     private fun elapsedMs(startNs: Long): Long = ((System.nanoTime() - startNs) / NANOS_PER_MILLI).coerceAtLeast(0L)
@@ -325,6 +312,7 @@ private fun LogLevel.toKtorLogLevel(): KtorLogLevel =
 private fun NetworkError.toEvent(
     endpoint: NetworkEndpoint,
     durationMs: Long,
+    attempt: Int,
 ): NetworkEvent {
     val statusCode =
         when (this) {
@@ -345,6 +333,7 @@ private fun NetworkError.toEvent(
         statusCode = statusCode,
         errorType = this::class.simpleName,
         isRetryable = retryable,
+        attempt = attempt,
     )
 }
 

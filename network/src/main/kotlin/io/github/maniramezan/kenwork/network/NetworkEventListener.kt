@@ -11,6 +11,8 @@ package io.github.maniramezan.kenwork.network
  * @property statusCode the final HTTP status, or `null` if the request never completed.
  * @property errorType a coarse error classification, or `null` on success.
  * @property isRetryable whether the failure is considered transient.
+ * @property attempt the 0-based attempt index this event describes (0 = first try). A request that
+ *   is retried emits one event per failed attempt followed by a final success/failure event.
  */
 public data class NetworkEvent(
     public val endpointId: String,
@@ -19,6 +21,7 @@ public data class NetworkEvent(
     public val statusCode: Int? = null,
     public val errorType: String? = null,
     public val isRetryable: Boolean = false,
+    public val attempt: Int = 0,
 ) {
     /** Whether this event represents a successful (2xx) request. */
     public val isSuccess: Boolean get() = errorType == null && statusCode in 200..299
