@@ -16,4 +16,6 @@ dependencies {
     api(libs.ktor.client.mock)
     api(libs.kotlinx.coroutines.test)
     api(libs.junit)
+
+    testImplementation(libs.kotlin.test.junit)
 }

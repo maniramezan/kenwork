@@ -74,6 +74,11 @@ public interface Cache<V : Any> {
     /**
      * A hot stream of [CacheChange]s for this cache. The default is an empty flow, so caches that
      * cannot observe mutations are simply non-reactive; observable caches override this.
+     *
+     * Delivery is **latest-wins**: under a burst that outruns a slow collector, the oldest change
+     * notifications may be dropped, but the most recent one is retained. Consumers that re-read on
+     * each event (e.g. `Repository.stream`) therefore always converge to the current value — they
+     * may skip intermediate values, never the latest.
      */
     public fun changes(): Flow<CacheChange> = emptyFlow()
 }
