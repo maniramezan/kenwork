@@ -130,3 +130,8 @@ dependency**. Consumers construct objects directly or wire them with their own D
 `MockEngine` (via the `:testing` module) drives `NetworkClient` with no sockets. Robolectric covers
 `NetworkMonitor`. The build enforces a JaCoCo line-coverage gate on the published modules.
 Unit tests run on a Java 21 toolchain (Robolectric + compileSdk 36 require it).
+
+The `:testing` module ships doubles for consumers: `mockNetworkClient` (now with `retryPolicy` /
+`reachabilityGate`), `jsonResponse`, `RecordingNetworkEventListener`, `FakeAuthorizationProvider`,
+`FakeReachabilityGate` (a controllable `ReachabilityGate`), and `RecordingRetryPolicy` (records
+retry decisions while delegating).
