@@ -67,6 +67,12 @@ fun testClient(
     maxTransientRetries: Int = 0,
     retryNonIdempotent: Boolean = false,
     retryBackoffBaseMillis: Long = 0,
+    retryPolicy: RetryPolicy =
+        DefaultRetryPolicy(
+            maxRetries = maxTransientRetries,
+            retryNonIdempotent = retryNonIdempotent,
+            backoffBaseMillis = retryBackoffBaseMillis,
+        ),
     eventListener: NetworkEventListener? = null,
     handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
 ): NetworkClient =
@@ -74,9 +80,7 @@ fun testClient(
         NetworkClientConfiguration(
             authorizationProvider = authorizationProvider,
             maxAuthRefreshAttempts = maxAuthRefreshAttempts,
-            maxTransientRetries = maxTransientRetries,
-            retryNonIdempotent = retryNonIdempotent,
-            retryBackoffBaseMillis = retryBackoffBaseMillis,
+            retryPolicy = retryPolicy,
             retryDelayMillis = 0,
             engine = MockEngine(handler),
             eventListener = eventListener,
