@@ -80,8 +80,51 @@ try {
 val cache = InMemoryCache<Video>(maxSize = 200)
 cache.setValue(video, CacheKey.endpoint("videos", mapOf("id" to "42")))
 
-// Two-tier: memory over a disk/DB cache, promoting hits with their original timestamp.
-val layered = LayeredCache(memory = InMemoryCache<Video>(maxSize = 100), persistent = diskCache)
+// Durable tier: one file per key. Bring your own value codec (here, kotlinx.serialization),
+// so :cache needs no serialization dependency of its own.
+val disk = FileSystemCache(
+    directory = File(context.cacheDir, "videos"),
+    encode = { Json.encodeToString(Video.serializer(), it) },
+    decode = { Json.decodeFromString(Video.serializer(), it) },
+)
+
+// Two-tier: memory over the disk cache, promoting hits with their original timestamp.
+val layered = LayeredCache(memory = InMemoryCache<Video>(maxSize = 100), persistent = disk)
+```
+
+## Retry policy
+
+```kotlin
+// Default: retries Timeout / NoInternetConnection / 429 / 5xx with jittered exponential backoff,
+// honors Retry-After, and retries idempotent methods only.
+val client = NetworkClient(NetworkClientConfiguration(
+    retryPolicy = DefaultRetryPolicy(maxRetries = 3, retryNonIdempotent = false),
+))
+
+// Disable retries:
+NetworkClientConfiguration(retryPolicy = RetryPolicy.None)
+
+// Fully custom: return the next delay in millis, or null to stop.
+NetworkClientConfiguration(
+    retryPolicy = RetryPolicy { attempt, method, error ->
+        if (error is NetworkError.ServerError && error.statusCode == 503 && attempt <= 5) 2_000L else null
+    },
+)
+```
+
+Each attempt emits a `NetworkEvent` (0-based `event.attempt`) to the `eventListener`, so retries are
+observable in telemetry.
+
+## Reachability-aware retry
+
+```kotlin
+val monitor = NetworkMonitor(context).apply { start() }
+val client = NetworkClient(NetworkClientConfiguration(
+    reachabilityGate = monitor.asReachabilityGate(),
+    reachabilityWaitMillis = 15_000,   // cap per retry
+))
+// On a retry, the client waits (bounded) for connectivity before backing off, so retries don't
+// burn attempts while offline. `monitor.awaitReachable()` is also usable standalone.
 ```
 
 ## Repositories
@@ -94,6 +137,20 @@ val repo = GenericRepository<Video>(
 
 val key = CacheKey.endpoint("videos", mapOf("id" to "42"))
 val fresh = repo.fetch(GetVideo(42), key, CachePolicy.ReturnCacheIfNotExpired(maxAgeMillis = 60_000))
+```
+
+Concurrent `fetch`es that miss the cache for the same key are **coalesced** into one network call.
+
+## Reactive streams (offline-first)
+
+```kotlin
+// Emits the initial fetch, then re-emits whenever the cached value for this key changes
+// (e.g. a background refresh or a write from another screen). Always converges to the latest value.
+repo.stream(GetVideo(42), key, CachePolicy.ReturnCacheElseLoad)
+    .collect { video -> render(video) }
+
+// Lower level: observe a cache directly.
+cache.changes().collect { change -> /* CacheChange.Updated / Removed / Cleared */ }
 ```
 
 ## SSL pinning
@@ -144,4 +201,21 @@ import io.github.maniramezan.kenwork.testing.*
     val video: Video = client.request(GetVideo(42))
     assertEquals(42, video.id)
 }
+
+// Exercise retry + reachability with controllable doubles:
+@Test fun retriesThenSucceeds() = runBlocking {
+    val policy = RecordingRetryPolicy(DefaultRetryPolicy(maxRetries = 1, backoffBaseMillis = 0))
+    val gate = FakeReachabilityGate(reachable = true)
+    var calls = 0
+    val client = mockNetworkClient(retryPolicy = policy, reachabilityGate = gate) {
+        calls++
+        if (calls == 1) jsonResponse("{}", HttpStatusCode.InternalServerError) else jsonResponse("""{"id":42,"title":"Hi"}""")
+    }
+    client.request<Video>(GetVideo(42))
+    assertEquals(1, policy.decisions.size)   // one retry decision recorded
+}
 ```
+
+`mockNetworkClient` defaults `retryPolicy` to `RetryPolicy.None` so tests are deterministic; opt in
+with a `DefaultRetryPolicy`/custom policy as above. `FakeReachabilityGate.setReachable(...)` lets a
+test resume a pending `awaitReachable()`.
