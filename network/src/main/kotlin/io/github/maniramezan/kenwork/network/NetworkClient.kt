@@ -23,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -134,8 +135,15 @@ public class NetworkClient(
             config.eventListener?.onEvent(mapped.toEvent(endpoint, elapsedMs(startNs), attempt))
             if (delayMillis == null) throw mapped
             attempt++
+            awaitReachable(config)
             if (delayMillis > 0) delay(delayMillis)
         }
+    }
+
+    /** Parks (bounded) until connectivity returns, when a [ReachabilityGate] is configured. */
+    private suspend fun awaitReachable(config: NetworkClientConfiguration) {
+        val gate = config.reachabilityGate ?: return
+        withTimeoutOrNull(config.reachabilityWaitMillis) { gate.awaitReachable() }
     }
 
     /** Releases a held client, closing it if it has been superseded and is now idle. */
