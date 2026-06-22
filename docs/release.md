@@ -10,10 +10,11 @@ plugin. You do not bump versions or upload artifacts by hand.
    - `feat:` → minor bump, `fix:`/`perf:`/`refactor:` → patch, `feat!:` / `BREAKING CHANGE:` →
      major, `chore:`/`docs:`/`test:`/`ci:` → no release.
 2. `ci.yml` runs `./gradlew check` (tests, detekt, ktlint, Android lint, JaCoCo gate).
-3. After CI passes, `release-please.yml` opens/updates a **release PR** that bumps `VERSION_NAME`
-   in `gradle.properties` (between the `# x-release-please-*` markers) and the manifest.
+3. After CI passes, `release-please.yml` opens/updates a **release PR** that bumps the version in
+   `.release-please-manifest.json` — the single source of truth. The Gradle build reads it from
+   there (`build.gradle.kts`), so no other file stores the version.
 4. Merging the release PR creates tag `vX.Y.Z` and invokes `release.yml`, which verifies the tag
-   matches `VERSION_NAME`, runs `check`, then:
+   matches the manifest version, runs `check`, then:
    ```
    ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
    ```
