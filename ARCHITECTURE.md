@@ -48,11 +48,21 @@ await it. One network request serves the whole burst — the same pattern as the
 Pass your own `CoroutineScope` to tie those loads to a lifecycle you own (otherwise an internal
 `SupervisorJob` is created and `close()` cancels it).
 
+### Cache tiers
+
+`InMemoryCache` (volatile, LRU) and `FileSystemCache` (durable `PersistentCache`, one file per key)
+both implement `TimestampedCache`, so `LayeredCache(memory, disk)` reads through memory → disk and
+promotes a disk hit into memory **without losing its age**. `FileSystemCache` keeps `:cache` free of
+a serialization dependency by taking caller-supplied `encode`/`decode` lambdas (e.g. wrap
+`kotlinx.serialization`), runs file I/O on an injectable context, and reads a corrupt file back as
+`null` rather than throwing.
+
 ### Atomic cache reads
 
 `Cache.entry(key)` / `LocalDataSource.entry(key)` return value **and** timestamp under a single lock
 so a freshness check can't observe a value and a timestamp written by two different operations. The
-default composes `value`/`timestamp` (non-atomic); `InMemoryCache` and `LayeredCache` override it.
+default composes `value`/`timestamp` (non-atomic); `InMemoryCache`, `LayeredCache`, and
+`FileSystemCache` override it.
 
 ### Reactive data layer
 
