@@ -10,6 +10,23 @@ plugins {
     alias(libs.plugins.maven.publish) apply false
 }
 
+// Single source of truth for the published version: the release-please manifest
+// (`.release-please-manifest.json`). release-please bumps it in the release PR; Gradle reads it
+// here so the version lives in exactly one file.
+val libraryVersion: String =
+    providers
+        .fileContents(layout.projectDirectory.file(".release-please-manifest.json"))
+        .asText
+        .map { json ->
+            Regex("\"\\.\"\\s*:\\s*\"([^\"]+)\"").find(json)?.groupValues?.get(1)
+                ?: error("No \".\" version found in .release-please-manifest.json")
+        }.get()
+
+allprojects {
+    group = providers.gradleProperty("GROUP").get()
+    version = libraryVersion
+}
+
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     jvmTarget = "17"
 }

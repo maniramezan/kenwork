@@ -33,17 +33,17 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
 
-      # Fail fast if the resolved tag doesn't match VERSION_NAME in gradle.properties,
-      # so we never attempt to publish a version that's already on Maven Central.
-      - name: Verify tag matches VERSION_NAME
+      # Fail fast if the resolved tag doesn't match the version in the release-please manifest
+      # (the single source of truth), so we never publish a version that's already on Maven Central.
+      - name: Verify tag matches manifest version
         env:
           TAG_INPUT: ${{ inputs.tag }}
         run: |
           TAG="${TAG_INPUT#v}"
-          VER="$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2 | sed 's/#.*//' | tr -d '[:space:]')"
-          echo "Tag version: $TAG | VERSION_NAME: $VER"
+          VER="$(sed -nE 's/.*"\."[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' .release-please-manifest.json | tr -d '[:space:]')"
+          echo "Tag version: $TAG | manifest version: $VER"
           if [ "$TAG" != "$VER" ]; then
-            echo "::error::Tag $TAG_INPUT does not match VERSION_NAME=$VER. Bump VERSION_NAME and re-tag."
+            echo "::error::Tag $TAG_INPUT does not match .release-please-manifest.json version=$VER."
             exit 1
           fi
 
