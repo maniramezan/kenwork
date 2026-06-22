@@ -3,9 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-group = providers.gradleProperty("GROUP").get()
-version = providers.gradleProperty("VERSION_NAME").get()
-
 android {
     namespace = "io.github.maniramezan.kenwork.network"
 }
