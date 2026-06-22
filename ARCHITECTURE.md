@@ -76,6 +76,13 @@ your own `RetryPolicy` for custom logic, or `RetryPolicy.None` to disable. This 
 Each attempt emits a `NetworkEvent` carrying its 0-based `attempt` index (one per failed attempt,
 then a final success/failure event), so telemetry can observe retry behavior.
 
+**Reachability-aware retry.** When a `reachabilityGate` is configured (e.g.
+`networkMonitor.asReachabilityGate()`), the client waits up to `reachabilityWaitMillis` for
+connectivity *before* each retry's backoff — so retries park while offline instead of burning
+attempts, then resume promptly when the network returns. `ReachabilityGate` is a one-method
+interface, so `NetworkClient` stays decoupled from any concrete connectivity source (and testable
+without one). `NetworkMonitor.awaitReachable()` exposes the same wait standalone.
+
 `updateConfiguration` reference-counts the active `HttpClient`, so a config swap never closes a
 client out from under an in-flight request; the superseded client closes once its last request
 drains.

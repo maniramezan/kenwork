@@ -7,12 +7,23 @@ import android.net.NetworkCapabilities
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 
 /** Coarse network reachability state. Mirrors SwiftyNetwork's `NetworkReachability`. */
 public enum class NetworkReachability {
     REACHABLE,
     UNREACHABLE,
     UNKNOWN,
+}
+
+/**
+ * A connectivity gate the retry path can wait on. Implemented by [NetworkMonitor] (via
+ * [NetworkMonitor.asReachabilityGate]), but kept abstract so [NetworkClient] doesn't depend on any
+ * concrete connectivity source and can be tested without one.
+ */
+public fun interface ReachabilityGate {
+    /** Suspends until connectivity is (believed) available, returning immediately if it already is. */
+    public suspend fun awaitReachable()
 }
 
 /**
@@ -74,6 +85,19 @@ public class NetworkMonitor(
     public fun stop() {
         runCatching { connectivityManager?.unregisterNetworkCallback(callback) }
     }
+
+    /**
+     * Suspends until [status] becomes [NetworkReachability.REACHABLE], returning immediately if it
+     * already is. Requires [start] to have been called; otherwise the status stays
+     * [NetworkReachability.UNKNOWN] and this never resumes — bound it with `withTimeout` for
+     * standalone use (the retry path already does).
+     */
+    public suspend fun awaitReachable() {
+        updates.first { it == NetworkReachability.REACHABLE }
+    }
+
+    /** Adapts this monitor to a [ReachabilityGate] for [NetworkClientConfiguration.reachabilityGate]. */
+    public fun asReachabilityGate(): ReachabilityGate = ReachabilityGate { awaitReachable() }
 
     private fun currentReachability(): NetworkReachability {
         val manager = connectivityManager ?: return NetworkReachability.UNKNOWN
