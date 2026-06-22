@@ -97,3 +97,38 @@ covered by `NetworkError`. Keep app-specific recorders (e.g. APITrace) and pass 
 
 Smoke test: a cold-start guest request authenticates; forcing a `401` triggers refresh-and-retry;
 the request recorder still captures traffic.
+
+## Upgrading kenwork: 0.1.x → 0.2.0
+
+**Breaking change — retry configuration.** The fixed retry knobs on `NetworkClientConfiguration`
+(`maxTransientRetries`, `retryNonIdempotent`, `retryBackoffBaseMillis`, `retryBackoffMaxMillis`) are
+replaced by a single pluggable `retryPolicy`. Migrate:
+
+```kotlin
+// 0.1.x
+NetworkClientConfiguration(
+    maxTransientRetries = 3,
+    retryNonIdempotent = true,
+    retryBackoffBaseMillis = 500,
+)
+
+// 0.2.0
+NetworkClientConfiguration(
+    retryPolicy = DefaultRetryPolicy(
+        maxRetries = 3,
+        retryNonIdempotent = true,
+        backoffBaseMillis = 500,
+    ),
+)
+```
+
+`DefaultRetryPolicy` is the default, so most callers need no change. It now also retries `429` and
+honors `Retry-After`. Use `RetryPolicy.None` to disable retries, or implement `RetryPolicy` for
+custom logic.
+
+**New, opt-in (no migration needed):**
+
+- `reachabilityGate` on the config (e.g. `networkMonitor.asReachabilityGate()`) parks retries while
+  offline.
+- `FileSystemCache` — a durable `PersistentCache` for `LayeredCache`'s persistent tier.
+- `Repository.stream(...)` and `Cache.changes()` for reactive, offline-first reads.
