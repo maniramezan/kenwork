@@ -12,19 +12,19 @@ free (plain constructors + a `Configuration` object).
 
 | Artifact | What it provides |
 |---|---|
-| `io.github.maniramezan.kenwork:network` | `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `NetworkError`, `NetworkMonitor`, `SslPinningConfiguration`, `KenworkLogger`, `NetworkEventListener` |
-| `io.github.maniramezan.kenwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `LayeredCache`, `CachePolicy`, `CacheKey` |
-| `io.github.maniramezan.kenwork:repository` | `Repository`/`GenericRepository`, `LocalDataSource`/`CacheBasedLocalDataSource` |
-| `io.github.maniramezan.kenwork:testing` | `MockEngine` client builder, fakes, recording listener for consumer tests |
+| `io.github.maniramezan.kenwork:network` | `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `RetryPolicy`/`DefaultRetryPolicy`, `NetworkError`, `NetworkMonitor`/`ReachabilityGate`, `SslPinningConfiguration`, `KenworkLogger`, `NetworkEventListener` |
+| `io.github.maniramezan.kenwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `FileSystemCache`, `LayeredCache`, `CachePolicy`, `CacheKey`, `CacheChange` |
+| `io.github.maniramezan.kenwork:repository` | `Repository`/`GenericRepository` (with `fetch` + reactive `stream`), `LocalDataSource`/`CacheBasedLocalDataSource` |
+| `io.github.maniramezan.kenwork:testing` | `MockEngine` client builder, fakes (`FakeAuthorizationProvider`, `FakeReachabilityGate`), `RecordingRetryPolicy`, recording listener for consumer tests |
 
 ## Install
 
 ```kotlin
 dependencies {
-    implementation("io.github.maniramezan.kenwork:network:0.1.0")
-    implementation("io.github.maniramezan.kenwork:cache:0.1.0")        // optional
-    implementation("io.github.maniramezan.kenwork:repository:0.1.0")   // optional
-    testImplementation("io.github.maniramezan.kenwork:testing:0.1.0")  // optional
+    implementation("io.github.maniramezan.kenwork:network:0.2.0")
+    implementation("io.github.maniramezan.kenwork:cache:0.2.0")        // optional
+    implementation("io.github.maniramezan.kenwork:repository:0.2.0")   // optional
+    testImplementation("io.github.maniramezan.kenwork:testing:0.2.0")  // optional
 }
 ```
 
@@ -65,13 +65,20 @@ A `401` automatically triggers a single coalesced token refresh and one retry.
 - Coroutine `NetworkClient` with reified `request<T>()` / `request<B, T>(body)`.
 - Pluggable `AuthorizationProvider`; `OAuthAuthorizationProvider` does coalesced 401
   refresh-and-retry.
+- **Pluggable `RetryPolicy`** — `DefaultRetryPolicy` retries timeouts, lost connectivity, `429`,
+  and `5xx` with jittered exponential backoff, honors `Retry-After`, and retries idempotent methods
+  only by default. Use `RetryPolicy.None` to disable, or supply your own.
+- **Reachability-aware retry** — give the client a `ReachabilityGate` (e.g.
+  `networkMonitor.asReachabilityGate()`) and retries park while offline, resuming when the network
+  returns instead of burning attempts.
 - Closed `NetworkError` set (`Unauthorized`, `Forbidden`, `NotFound`, `ServerError`, `Timeout`,
   `NoInternetConnection`, `DecodingFailed`, …).
-- Caching: `InMemoryCache` (LRU + expiry), `LayeredCache` (memory + persistent with timestamp
-  promotion), `CachePolicy`.
-- `GenericRepository` coordinating network + cache with write-through.
-- `NetworkMonitor` connectivity (`Flow`), OkHttp `SslPinningConfiguration`, `KenworkLogger`,
-  and a `NetworkEventListener` telemetry hook.
+- Caching: `InMemoryCache` (LRU + expiry), **`FileSystemCache`** (durable `PersistentCache`),
+  `LayeredCache` (memory + persistent with timestamp promotion), `CachePolicy`.
+- `GenericRepository` coordinating network + cache with write-through, **single-flight** load
+  coalescing, and a **reactive `stream()`** that re-emits on cache changes (offline-first).
+- `NetworkMonitor` connectivity (`StateFlow`), OkHttp `SslPinningConfiguration`, `KenworkLogger`,
+  and a `NetworkEventListener` telemetry hook (with per-attempt retry events).
 
 ## Documentation
 
