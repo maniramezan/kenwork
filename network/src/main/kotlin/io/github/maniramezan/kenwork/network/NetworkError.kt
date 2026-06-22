@@ -21,10 +21,14 @@ public sealed class NetworkError(
     /** The response body was missing or unreadable. */
     public data object InvalidData : NetworkError("Invalid data")
 
-    /** A non-2xx status outside the specifically-mapped cases below, carrying the raw [body]. */
+    /**
+     * A non-2xx status outside the specifically-mapped cases below, carrying the raw [body] and the
+     * parsed `Retry-After` hint in milliseconds ([retryAfterMillis]), when the server sent one.
+     */
     public class ServerError(
         public val statusCode: Int,
         public val body: ByteArray?,
+        public val retryAfterMillis: Long? = null,
     ) : NetworkError("Server error: $statusCode")
 
     /** HTTP 401. */
