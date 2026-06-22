@@ -23,6 +23,10 @@ public val DefaultKenworkJson: Json =
  * @property retryPolicy decides whether/when to retry a failed request. Defaults to
  *   [DefaultRetryPolicy] (jittered exponential backoff for timeouts, lost connectivity, `429`, and
  *   `5xx`, honoring `Retry-After`). Supply your own or [RetryPolicy.None] to disable retries.
+ * @property reachabilityGate optional connectivity gate (e.g. `networkMonitor.asReachabilityGate()`):
+ *   before each retry's backoff, the client waits up to [reachabilityWaitMillis] for connectivity, so
+ *   retries park while offline instead of burning attempts. `null` disables the wait.
+ * @property reachabilityWaitMillis cap on how long a single retry waits on [reachabilityGate].
  * @property timeoutMillis per-request timeout.
  * @property retryDelayMillis delay between a successful refresh and the retry.
  * @property logLevel verbosity of the Ktor request logger.
@@ -40,6 +44,8 @@ public class NetworkClientConfiguration(
     public val authorizationProvider: AuthorizationProvider? = null,
     public val maxAuthRefreshAttempts: Int = 1,
     public val retryPolicy: RetryPolicy = DefaultRetryPolicy(),
+    public val reachabilityGate: ReachabilityGate? = null,
+    public val reachabilityWaitMillis: Long = DEFAULT_REACHABILITY_WAIT_MILLIS,
     public val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
     public val retryDelayMillis: Long = DEFAULT_RETRY_DELAY_MILLIS,
     public val logLevel: LogLevel = LogLevel.WARNING,
@@ -53,5 +59,6 @@ public class NetworkClientConfiguration(
     public companion object {
         public const val DEFAULT_TIMEOUT_MILLIS: Long = 30_000
         public const val DEFAULT_RETRY_DELAY_MILLIS: Long = 1_000
+        public const val DEFAULT_REACHABILITY_WAIT_MILLIS: Long = 30_000
     }
 }
