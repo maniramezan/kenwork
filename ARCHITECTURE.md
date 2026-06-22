@@ -62,13 +62,19 @@ Beyond `NetworkMonitor`, the data layer is observable: `Cache.changes()` /
 initial `fetch`, then re-emits the stored value whenever the local store reports a change for that
 key (`distinctUntilChanged`), giving an offline-first single-source-of-truth stream for UIs.
 
-## Resilience: transient retry
+## Resilience: retry policy
 
-`NetworkClient` retries transient failures — `Timeout`, `NoInternetConnection`, and `5xx`
-`ServerError` — up to `maxTransientRetries` (default 2) with exponential backoff and full jitter
-(`retryBackoffBaseMillis` → `retryBackoffMaxMillis`). Only **idempotent** methods are retried unless
-`retryNonIdempotent` is set, so a `POST`/`PATCH` is never transparently replayed by default. This is
-distinct from the `401` refresh-and-retry path above.
+Retry is governed by a pluggable `RetryPolicy` (`config.retryPolicy`): after each failed attempt
+`NetworkClient` asks it for the next delay, or `null` to give up. The default `DefaultRetryPolicy`
+retries `Timeout`, `NoInternetConnection`, `429`, and `5xx` up to `maxRetries` (default 2) with
+exponential backoff + full jitter, and **honors a `Retry-After` header** (delta-seconds or HTTP
+date) over the computed backoff when present. Only **idempotent** methods are retried unless
+`retryNonIdempotent` is set, so a `POST`/`PATCH` is never transparently replayed by default. Supply
+your own `RetryPolicy` for custom logic, or `RetryPolicy.None` to disable. This is distinct from the
+`401` refresh-and-retry path above.
+
+Each attempt emits a `NetworkEvent` carrying its 0-based `attempt` index (one per failed attempt,
+then a final success/failure event), so telemetry can observe retry behavior.
 
 `updateConfiguration` reference-counts the active `HttpClient`, so a config swap never closes a
 client out from under an in-flight request; the superseded client closes once its last request
