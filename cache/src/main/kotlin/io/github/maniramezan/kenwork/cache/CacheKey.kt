@@ -1,5 +1,7 @@
 package io.github.maniramezan.kenwork.cache
 
+import java.net.URLEncoder
+
 /**
  * A stable, hashable identifier for a cached value.
  *
@@ -30,6 +32,9 @@ public data class CacheKey(
         /**
          * A key for an [endpoint] plus sorted [parameters], e.g. `videos?limit=20&offset=0`.
          * Parameters are sorted by name so key identity is independent of insertion order.
+         * Names and values are percent-encoded so a literal `&`/`=`/`?` inside a parameter can't
+         * be mistaken for a separator and collide with a differently-shaped parameter set (e.g.
+         * `{"a": "b&c=d"}` no longer produces the same key as `{"a": "b", "c": "d"}`).
          */
         public fun endpoint(
             endpoint: String,
@@ -39,8 +44,10 @@ public data class CacheKey(
             val query =
                 parameters.entries
                     .sortedBy { it.key }
-                    .joinToString("&") { "${it.key}=${it.value}" }
+                    .joinToString("&") { "${it.key.encode()}=${it.value.encode()}" }
             return CacheKey("$endpoint?$query")
         }
+
+        private fun String.encode(): String = URLEncoder.encode(this, Charsets.UTF_8.name())
     }
 }

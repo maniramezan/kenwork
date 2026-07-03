@@ -50,8 +50,10 @@ public class LayeredCache<V : Any>(
         value: V,
         key: CacheKey,
     ) {
-        memory.setValue(value, key)
+        // Durable layer first: if it throws (disk full, IO error), memory is left untouched rather
+        // than diverging ahead of a write that never actually persisted.
         persistent?.setValue(value, key)
+        memory.setValue(value, key)
         changeFlow.tryEmit(CacheChange.Updated(key))
     }
 

@@ -55,7 +55,9 @@ both implement `TimestampedCache`, so `LayeredCache(memory, disk)` reads through
 promotes a disk hit into memory **without losing its age**. `FileSystemCache` keeps `:cache` free of
 a serialization dependency by taking caller-supplied `encode`/`decode` lambdas (e.g. wrap
 `kotlinx.serialization`), runs file I/O on an injectable context, and reads a corrupt file back as
-`null` rather than throwing.
+`null` rather than throwing. `LayeredCache.setValue` writes the persistent layer **before** memory,
+so a failed durable write (disk full, IO error) can't leave memory holding a value the disk layer
+never actually persisted.
 
 ### Atomic cache reads
 
@@ -68,9 +70,10 @@ default composes `value`/`timestamp` (non-atomic); `InMemoryCache`, `LayeredCach
 
 Beyond `NetworkMonitor`, the data layer is observable: `Cache.changes()` /
 `LocalDataSource.changes()` emit a `CacheChange` (`Updated`/`Removed`/`Cleared`) on every mutation
-(read-time LRU promotion does **not** emit). `Repository.stream(endpoint, key, policy)` emits an
-initial `fetch`, then re-emits the stored value whenever the local store reports a change for that
-key (`distinctUntilChanged`), giving an offline-first single-source-of-truth stream for UIs.
+(read-time LRU promotion does **not** emit). `Repository.stream(endpoint, key, policy)` subscribes
+to `changes()` *before* running its initial `fetch` (so a mutation landing in between isn't
+missed), then re-emits the stored value whenever the local store reports a change for that key
+(`distinctUntilChanged`), giving an offline-first single-source-of-truth stream for UIs.
 
 ## Resilience: retry policy
 
