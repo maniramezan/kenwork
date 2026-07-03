@@ -13,6 +13,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.readRawBytes
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -202,8 +203,8 @@ public class NetworkClient(
                 bodyType != null -> {
                     // ContentNegotiation serializes the typed body based on the request's
                     // Content-Type, so set JSON unless the endpoint already specified one.
-                    if (headers[io.ktor.http.HttpHeaders.ContentType] == null) {
-                        contentType(io.ktor.http.ContentType.Application.Json)
+                    if (headers[HttpHeaders.ContentType] == null) {
+                        contentType(ContentType.Application.Json)
                     }
                     setBody(body, bodyType)
                 }
@@ -330,10 +331,19 @@ private fun NetworkError.toEvent(
             is NetworkError.ServerError -> statusCode
             else -> null
         }
+    // A coarse, RetryPolicy-agnostic classification of "does this look like a transient failure"
+    // for telemetry — mirrors the status codes DefaultRetryPolicy treats as retryable (429 + 5xx)
+    // plus timeouts/connectivity loss. It intentionally does not reflect a *specific* configured
+    // RetryPolicy's exhaustion state (maxRetries) or custom `isRetryableStatus`, since those answer
+    // "was this attempt retried", not "is this class of failure retryable in general".
     val retryable =
         this is NetworkError.Timeout ||
             this is NetworkError.NoInternetConnection ||
-            (this is NetworkError.ServerError && statusCode != null && statusCode >= 500)
+            (
+                this is NetworkError.ServerError &&
+                    statusCode != null &&
+                    (statusCode == HTTP_TOO_MANY_REQUESTS || statusCode >= HTTP_SERVER_ERROR)
+            )
     return NetworkEvent(
         endpointId = endpoint.endpointId(),
         method = endpoint.method.value,
@@ -347,6 +357,9 @@ private fun NetworkError.toEvent(
 
 private val UUID_REGEX =
     Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+
+private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_SERVER_ERROR = 500
 
 /** A low-cardinality identifier for telemetry: path with numeric/uuid segments normalized. */
 internal fun NetworkEndpoint.endpointId(): String {

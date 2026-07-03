@@ -117,4 +117,43 @@ class RepositoryReactiveTest {
 
             assertEquals(listOf(ReactiveItem("net"), ReactiveItem("updated")), emissions)
         }
+
+    @Test
+    fun `stream does not miss a change that lands during the initial fetch`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val network =
+                object : NetworkDataSource {
+                    @Suppress("UNCHECKED_CAST")
+                    override suspend fun <T> request(
+                        endpoint: NetworkEndpoint,
+                        body: Any?,
+                        bodyType: TypeInfo?,
+                        responseType: TypeInfo,
+                    ): T {
+                        gate.await()
+                        return ReactiveItem("net") as T
+                    }
+                }
+            val local = CacheBasedLocalDataSource(InMemoryCache<ReactiveItem>())
+            val repository = GenericRepository<ReactiveItem>(network, local, scope = backgroundScope)
+
+            val emissions = mutableListOf<ReactiveItem>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                repository.stream(endpoint, key, CachePolicy.ReloadIgnoringCache).collect { emissions += it }
+            }
+            runCurrent()
+
+            // A change lands while the initial fetch's network call is still in flight. With
+            // `changes()` subscribed before the fetch runs, this must not be dropped even though
+            // the collector hasn't observed the fetch's own result yet.
+            local.write(ReactiveItem("racing"), key)
+            runCurrent()
+            assertEquals(listOf(ReactiveItem("racing")), emissions)
+
+            gate.complete(Unit)
+            runCurrent()
+
+            assertEquals(listOf(ReactiveItem("racing"), ReactiveItem("net")), emissions)
+        }
 }
