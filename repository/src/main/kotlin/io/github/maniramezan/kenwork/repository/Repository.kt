@@ -8,6 +8,7 @@ import io.github.maniramezan.kenwork.network.NetworkDataSource
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
 import io.ktor.util.reflect.TypeInfo
 import io.ktor.util.reflect.typeInfo
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -15,9 +16,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -104,12 +108,22 @@ public class GenericRepository<E : Any>(
         cacheKey: CacheKey,
         policy: CachePolicy,
     ): Flow<E> =
-        flow {
-            emit(fetch(endpoint, cacheKey, policy))
-            localDataSource
-                .changes()
-                .filter { it.affects(cacheKey) }
-                .collect { localDataSource.read(cacheKey)?.let { value -> emit(value) } }
+        channelFlow {
+            // Subscribe to changes *before* the initial fetch so a mutation landing between the
+            // fetch and the subscription can't be missed (a fetch-then-subscribe ordering would
+            // leave a narrow gap where such a change is silently dropped).
+            val subscribed = CompletableDeferred<Unit>()
+            val changesJob =
+                launch {
+                    localDataSource
+                        .changes()
+                        .filter { it.affects(cacheKey) }
+                        .onStart { subscribed.complete(Unit) }
+                        .collect { localDataSource.read(cacheKey)?.let { value -> send(value) } }
+                }
+            subscribed.await()
+            send(fetch(endpoint, cacheKey, policy))
+            changesJob.join()
         }.distinctUntilChanged()
 
     /**
