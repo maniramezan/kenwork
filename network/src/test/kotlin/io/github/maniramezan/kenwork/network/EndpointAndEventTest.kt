@@ -49,4 +49,26 @@ class EndpointAndEventTest {
             assertEquals("ServerError", event.errorType)
             assertTrue(event.isRetryable)
         }
+
+    @Test
+    fun `records a retryable failure event for 429 too many requests`(): Unit =
+        runBlocking {
+            val listener = RecordingListener()
+            val client = testClient(eventListener = listener) { json("{}", HttpStatusCode.TooManyRequests) }
+            assertFailsWith<NetworkError.ServerError> { client.request<Sample>(TestEndpoint("videos/1")) }
+            val event = listener.events.single()
+            assertEquals(429, event.statusCode)
+            assertTrue(event.isRetryable)
+        }
+
+    @Test
+    fun `records a non-retryable failure event for not found`(): Unit =
+        runBlocking {
+            val listener = RecordingListener()
+            val client = testClient(eventListener = listener) { json("{}", HttpStatusCode.NotFound) }
+            assertFailsWith<NetworkError.NotFound> { client.request<Sample>(TestEndpoint("videos/1")) }
+            val event = listener.events.single()
+            assertEquals(404, event.statusCode)
+            assertTrue(!event.isRetryable)
+        }
 }

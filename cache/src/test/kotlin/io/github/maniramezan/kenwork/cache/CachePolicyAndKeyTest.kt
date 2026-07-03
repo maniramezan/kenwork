@@ -35,4 +35,13 @@ class CachePolicyAndKeyTest {
             CacheKey.endpoint("videos", mapOf("limit" to "20", "offset" to "0")),
         )
     }
+
+    @Test
+    fun `endpoint keys percent-encode parameters so separators can't collide`() {
+        // A literal `&`/`=` inside a value must not be mistaken for the key's own separators, so
+        // these two distinct parameter sets never produce the same CacheKey.
+        val embeddedSeparators = CacheKey.endpoint("search", mapOf("q" to "a&b=c"))
+        val splitParameters = CacheKey.endpoint("search", mapOf("q" to "a", "b" to "c"))
+        assertFalse(embeddedSeparators == splitParameters)
+    }
 }
