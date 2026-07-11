@@ -54,7 +54,7 @@ public class NetworkMonitor(
     private val callback =
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                mutableStatus.value = NetworkReachability.REACHABLE
+                mutableStatus.value = currentReachability()
             }
 
             override fun onLost(network: Network) {
@@ -65,12 +65,7 @@ public class NetworkMonitor(
                 network: Network,
                 capabilities: NetworkCapabilities,
             ) {
-                mutableStatus.value =
-                    if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
-                        NetworkReachability.REACHABLE
-                    } else {
-                        NetworkReachability.UNREACHABLE
-                    }
+                mutableStatus.value = capabilities.toReachability()
             }
         }
 
@@ -104,8 +99,14 @@ public class NetworkMonitor(
         val capabilities = manager.activeNetwork?.let { manager.getNetworkCapabilities(it) }
         return when {
             capabilities == null -> NetworkReachability.UNREACHABLE
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> NetworkReachability.REACHABLE
-            else -> NetworkReachability.UNREACHABLE
+            else -> capabilities.toReachability()
         }
     }
 }
+
+private fun NetworkCapabilities.toReachability(): NetworkReachability =
+    if (hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+        NetworkReachability.REACHABLE
+    } else {
+        NetworkReachability.UNREACHABLE
+    }
