@@ -58,14 +58,14 @@ public class LayeredCache<V : Any>(
     }
 
     override suspend fun removeValue(key: CacheKey) {
-        memory.removeValue(key)
         persistent?.removeValue(key)
+        memory.removeValue(key)
         changeFlow.tryEmit(CacheChange.Removed(key))
     }
 
     override suspend fun removeAll() {
-        memory.removeAll()
         persistent?.removeAll()
+        memory.removeAll()
         changeFlow.tryEmit(CacheChange.Cleared)
     }
 
