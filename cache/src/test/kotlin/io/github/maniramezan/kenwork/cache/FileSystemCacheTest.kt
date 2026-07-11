@@ -84,6 +84,19 @@ class FileSystemCacheTest {
         }
 
     @Test
+    fun `writes replace the entry without leaving temporary files`() =
+        runTest {
+            val cache = cache()
+
+            cache.setValue("first", key)
+            cache.setValue("second", key)
+
+            assertEquals("second", cache.value(key))
+            assertEquals(1, dir.listFiles { file -> file.name.endsWith(".kenc") }?.size)
+            assertEquals(0, dir.listFiles { file -> file.name.endsWith(".tmp") }?.size)
+        }
+
+    @Test
     fun `emits change events on mutation`() =
         runTest {
             val cache = cache()
