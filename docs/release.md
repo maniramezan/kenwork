@@ -13,7 +13,7 @@ plugin. You do not bump versions or upload artifacts by hand.
 3. After CI passes, `release-please.yml` opens/updates a **release PR** that bumps the version in
    `.release-please-manifest.json` — the single source of truth. The Gradle build reads it from
    there (`build.gradle.kts`), so no other file stores the version.
-4. Merging the release PR creates tag `vX.Y.Z` and invokes `release.yml`, which verifies the tag
+4. Merging the release PR creates a bare SemVer tag `X.Y.Z` (for example, `0.2.2`) and invokes `release.yml`, which verifies the tag
    matches the manifest version, runs `check`, then:
    ```
    ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
@@ -21,6 +21,9 @@ plugin. You do not bump versions or upload artifacts by hand.
    vanniktech (with `SONATYPE_HOST=CENTRAL_PORTAL`) creates, uploads, signs, and **releases** the
    deployment to Maven Central, and a GitHub Release is created.
 5. `docs.yml` publishes the aggregated Dokka API site to GitHub Pages.
+
+The historical `v0.1.0` through `v0.2.1` tags remain intact. New releases deliberately use bare
+SemVer tags and are not compatible with `v`-prefixed manual publish inputs.
 
 ## Required GitHub secrets
 
