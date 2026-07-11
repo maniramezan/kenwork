@@ -21,10 +21,10 @@ free (plain constructors + a `Configuration` object).
 
 ```kotlin
 dependencies {
-    implementation("io.github.maniramezan.kenwork:network:0.2.0")
-    implementation("io.github.maniramezan.kenwork:cache:0.2.0")        // optional
-    implementation("io.github.maniramezan.kenwork:repository:0.2.0")   // optional
-    testImplementation("io.github.maniramezan.kenwork:testing:0.2.0")  // optional
+    implementation("io.github.maniramezan.kenwork:network:0.2.1")
+    implementation("io.github.maniramezan.kenwork:cache:0.2.1")        // optional
+    implementation("io.github.maniramezan.kenwork:repository:0.2.1")   // optional
+    testImplementation("io.github.maniramezan.kenwork:testing:0.2.1")  // optional
 }
 ```
 
@@ -33,6 +33,13 @@ Minimum SDK 26, JDK 17 bytecode.
 ## 60-second quickstart
 
 ```kotlin
+import io.github.maniramezan.kenwork.network.HttpMethod
+import io.github.maniramezan.kenwork.network.NetworkClient
+import io.github.maniramezan.kenwork.network.NetworkClientConfiguration
+import io.github.maniramezan.kenwork.network.NetworkEndpoint
+import io.github.maniramezan.kenwork.network.OAuthAuthorizationProvider
+import kotlinx.serialization.Serializable
+
 // 1. Describe an endpoint.
 data class GetVideo(val id: Int) : NetworkEndpoint {
     override val baseUrl = "https://api.example.com"
@@ -53,8 +60,8 @@ val client = NetworkClient(
     ),
 )
 
-// 3. Make type-safe requests.
-val video: Video = client.request(GetVideo(id = 42))
+// 3. Make type-safe requests from a coroutine.
+suspend fun loadVideo(): Video = client.request(GetVideo(id = 42))
 ```
 
 A `401` automatically triggers a single coalesced token refresh and one retry.
@@ -87,7 +94,7 @@ A `401` automatically triggers a single coalesced token refresh and one retry.
 - [docs/parity.md](docs/parity.md) — SwiftyNetwork ↔ kenwork mapping.
 - [MIGRATION.md](MIGRATION.md) — moving an existing Ktor/auth layer onto kenwork.
 - [docs/release.md](docs/release.md) — how releases reach Maven Central.
-- API reference (Dokka): published to GitHub Pages on each release.
+- API reference (Dokka): published to GitHub Pages on pushes to `main`.
 
 ## License
 

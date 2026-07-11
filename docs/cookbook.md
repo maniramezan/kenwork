@@ -158,12 +158,17 @@ cache.changes().collect { change -> /* CacheChange.Updated / Removed / Cleared *
 ```kotlin
 val pinning = SslPinningConfiguration.pinning(
     pinnedHosts = mapOf("api.example.com" to setOf(
-        SslPinningConfiguration.Pin.publicKeySha256("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+        // Deploy the current and backup SPKI pins before rotating the certificate key.
+        SslPinningConfiguration.Pin.publicKeySha256("CURRENT_PUBLIC_KEY_SHA256_BASE64="),
+        SslPinningConfiguration.Pin.publicKeySha256("BACKUP_PUBLIC_KEY_SHA256_BASE64="),
     )),
     includesSubdomains = true,
 )
 val client = NetworkClient(NetworkClientConfiguration(sslPinning = pinning))
 ```
+
+Pinning failures block all connections to the host. Validate pins against the production certificate
+before release, and keep both the current and next public-key pins deployed during key rotation.
 
 ## Connectivity
 
