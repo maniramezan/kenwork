@@ -96,4 +96,23 @@ class NetworkClientRequestTest {
             val client = testClient { json("not-json") }
             assertFailsWith<NetworkError.DecodingFailed> { client.request<Sample>(TestEndpoint("x")) }
         }
+
+    @Test
+    fun `close prevents further requests`(): Unit =
+        runBlocking {
+            val client = testClient { json("""{"id":1,"name":"ada"}""") }
+
+            client.close()
+
+            assertFailsWith<IllegalStateException> { client.request<Sample>(TestEndpoint("samples/1")) }
+        }
+
+    @Test
+    fun `close is idempotent`(): Unit =
+        runBlocking {
+            val client = testClient { json("""{"id":1,"name":"ada"}""") }
+
+            client.close()
+            client.close()
+        }
 }
