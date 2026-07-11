@@ -75,20 +75,48 @@ class LayeredCacheTest {
             // holding a value the disk layer never actually persisted.
             assertNull(memory.value(CacheKey("k")))
         }
+
+    @Test
+    fun `a failed persistent removal leaves memory intact`() =
+        runTest {
+            val key = CacheKey("k")
+            val memory = InMemoryCache<String>().also { it.setValue("v", key) }
+            val layered = LayeredCache(memory, FailingCache(failRemovals = true))
+
+            assertFailsWith<IllegalStateException> { layered.removeValue(key) }
+
+            assertEquals("v", memory.value(key))
+        }
+
+    @Test
+    fun `a failed persistent clear leaves memory intact`() =
+        runTest {
+            val key = CacheKey("k")
+            val memory = InMemoryCache<String>().also { it.setValue("v", key) }
+            val layered = LayeredCache(memory, FailingCache(failClears = true))
+
+            assertFailsWith<IllegalStateException> { layered.removeAll() }
+
+            assertEquals("v", memory.value(key))
+        }
 }
 
 /** A [Cache] whose [setValue] always fails, for exercising write-ordering/failure semantics. */
-private class FailingCache<V : Any> : Cache<V> {
+private class FailingCache<V : Any>(
+    private val failWrites: Boolean = true,
+    private val failRemovals: Boolean = false,
+    private val failClears: Boolean = false,
+) : Cache<V> {
     override suspend fun value(key: CacheKey): V? = null
 
     override suspend fun setValue(
         value: V,
         key: CacheKey,
-    ): Unit = error("write failed")
+    ): Unit = if (failWrites) error("write failed") else Unit
 
-    override suspend fun removeValue(key: CacheKey): Unit = Unit
+    override suspend fun removeValue(key: CacheKey): Unit = if (failRemovals) error("removal failed") else Unit
 
-    override suspend fun removeAll(): Unit = Unit
+    override suspend fun removeAll(): Unit = if (failClears) error("clear failed") else Unit
 
     override suspend fun timestamp(key: CacheKey): Long? = null
 }
