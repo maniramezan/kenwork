@@ -97,4 +97,19 @@ class AuthTest {
             assertFailsWith<NetworkError.Unauthorized> { client.request<Sample>(TestEndpoint("x")) }
             assertEquals(0, provider.refreshCount)
         }
+
+    @Test
+    fun `does not refresh the provider for an endpoint-authenticated 401`(): Unit =
+        runBlocking {
+            val provider = TestAuthProvider("provider")
+            val client =
+                testClient(authorizationProvider = provider) {
+                    json("{}", HttpStatusCode.Unauthorized)
+                }
+
+            assertFailsWith<NetworkError.Unauthorized> {
+                client.request<Sample>(TestEndpoint("x", authorization = AuthorizationType.Bearer("endpoint")))
+            }
+            assertEquals(0, provider.refreshCount)
+        }
 }
