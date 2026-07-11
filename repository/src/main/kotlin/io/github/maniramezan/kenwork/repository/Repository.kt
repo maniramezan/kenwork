@@ -52,6 +52,18 @@ public interface Repository<E : Any> {
         cacheKey: CacheKey,
         policy: CachePolicy = CachePolicy.Default,
     ): Flow<E> = flow { emit(fetch(endpoint, cacheKey, policy)) }
+
+    /**
+     * Observes the entity like [stream], also emitting `null` when its local value is removed.
+     *
+     * Use this when consumers must clear displayed state after an explicit removal, cache expiry,
+     * or a full local-store clear.
+     */
+    public fun streamOrNull(
+        endpoint: NetworkEndpoint,
+        cacheKey: CacheKey,
+        policy: CachePolicy = CachePolicy.Default,
+    ): Flow<E?> = flow { emit(fetch(endpoint, cacheKey, policy)) }
 }
 
 /**
@@ -120,6 +132,26 @@ public class GenericRepository<E : Any>(
                         .filter { it.affects(cacheKey) }
                         .onStart { subscribed.complete(Unit) }
                         .collect { localDataSource.read(cacheKey)?.let { value -> send(value) } }
+                }
+            subscribed.await()
+            send(fetch(endpoint, cacheKey, policy))
+            changesJob.join()
+        }.distinctUntilChanged()
+
+    override fun streamOrNull(
+        endpoint: NetworkEndpoint,
+        cacheKey: CacheKey,
+        policy: CachePolicy,
+    ): Flow<E?> =
+        channelFlow {
+            val subscribed = CompletableDeferred<Unit>()
+            val changesJob =
+                launch {
+                    localDataSource
+                        .changes()
+                        .filter { it.affects(cacheKey) }
+                        .onStart { subscribed.complete(Unit) }
+                        .collect { send(localDataSource.read(cacheKey)) }
                 }
             subscribed.await()
             send(fetch(endpoint, cacheKey, policy))

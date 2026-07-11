@@ -156,4 +156,31 @@ class RepositoryReactiveTest {
 
             assertEquals(listOf(ReactiveItem("racing"), ReactiveItem("net")), emissions)
         }
+
+    @Test
+    fun `streamOrNull emits null after local removal`() =
+        runTest {
+            val network =
+                object : NetworkDataSource {
+                    @Suppress("UNCHECKED_CAST")
+                    override suspend fun <T> request(
+                        endpoint: NetworkEndpoint,
+                        body: Any?,
+                        bodyType: TypeInfo?,
+                        responseType: TypeInfo,
+                    ): T = ReactiveItem("net") as T
+                }
+            val local = CacheBasedLocalDataSource(InMemoryCache<ReactiveItem>())
+            val repository = GenericRepository<ReactiveItem>(network, local, scope = backgroundScope)
+            val emissions = mutableListOf<ReactiveItem?>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                repository.streamOrNull(endpoint, key, CachePolicy.ReturnCacheElseLoad).collect { emissions += it }
+            }
+            runCurrent()
+
+            local.remove(key)
+            runCurrent()
+
+            assertEquals(listOf(ReactiveItem("net"), null), emissions)
+        }
 }
