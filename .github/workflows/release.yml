@@ -23,6 +23,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: secrets
     steps:
       - uses: actions/checkout@v6
         with:
