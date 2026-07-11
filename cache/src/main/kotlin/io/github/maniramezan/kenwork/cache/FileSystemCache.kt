@@ -9,6 +9,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import kotlin.coroutines.CoroutineContext
 
@@ -21,9 +23,11 @@ import kotlin.coroutines.CoroutineContext
  * timestamp on its first line followed by the encoded value, so it is a [TimestampedCache] and
  * promotes into a memory layer without losing age (see [LayeredCache]).
  *
- * File I/O runs on [ioContext] and is guarded by a [Mutex]; only files this cache wrote (suffixed
- * [SUFFIX]) are touched, so the directory may be shared. A malformed or unreadable file reads back
- * as `null` rather than throwing.
+ * File I/O runs on [ioContext] and is guarded by a [Mutex]. Writes use a same-directory temporary
+ * file and atomic replacement, so a process interruption leaves either the old complete entry or
+ * the new complete entry. Only files this cache wrote (suffixed [SUFFIX]) are touched, so the
+ * directory may be shared. A malformed or unreadable file reads back as `null` rather than
+ * throwing.
  *
  * @param directory the storage directory; created on first write.
  * @param encode serializes a value to text.
@@ -99,8 +103,20 @@ public class FileSystemCache<V : Any>(
         value: V,
         timestamp: Long,
     ) {
-        if (!directory.exists()) directory.mkdirs()
-        fileFor(key).writeText("$timestamp\n${encode(value)}")
+        check(directory.exists() || directory.mkdirs()) { "Unable to create cache directory: $directory" }
+        val destination = fileFor(key)
+        val temporary = File.createTempFile(destination.name, TEMPORARY_SUFFIX, directory)
+        try {
+            temporary.writeText("$timestamp\n${encode(value)}")
+            Files.move(
+                temporary.toPath(),
+                destination.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        } finally {
+            temporary.delete()
+        }
     }
 
     private fun fileFor(key: CacheKey): File = File(directory, hash(key.rawValue) + SUFFIX)
@@ -113,6 +129,7 @@ public class FileSystemCache<V : Any>(
 
     private companion object {
         private const val SUFFIX = ".kenc"
+        private const val TEMPORARY_SUFFIX = ".tmp"
         private const val CHANGE_BUFFER_CAPACITY = 64
     }
 }
