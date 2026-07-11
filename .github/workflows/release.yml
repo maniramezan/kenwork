@@ -10,6 +10,15 @@ on:
         description: Tag to build and publish (e.g. v0.1.0)
         required: true
         type: string
+    secrets:
+      MAVEN_CENTRAL_USERNAME:
+        required: true
+      MAVEN_CENTRAL_PASSWORD:
+        required: true
+      SIGNING_IN_MEMORY_KEY:
+        required: true
+      SIGNING_IN_MEMORY_KEY_PASSWORD:
+        required: true
   workflow_dispatch:
     inputs:
       tag:
@@ -18,10 +27,14 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -58,6 +71,12 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
         run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
 
+  create-github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag }}
