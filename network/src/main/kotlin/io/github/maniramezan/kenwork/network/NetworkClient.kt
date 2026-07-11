@@ -165,6 +165,7 @@ public class NetworkClient(
         bodyType: TypeInfo?,
     ): HttpResponse {
         val provider = config.authorizationProvider
+        val usesProviderAuthorization = endpoint.authorization == AuthorizationType.None
         var attempt = 0
         while (true) {
             val auth =
@@ -174,7 +175,7 @@ public class NetworkClient(
                     ?: AuthorizationType.None
             val response = performCall(client, endpoint, body, bodyType, auth)
             if (response.status != HttpStatusCode.Unauthorized) return response
-            if (provider == null || attempt >= config.maxAuthRefreshAttempts) return response
+            if (!usesProviderAuthorization || provider == null || attempt >= config.maxAuthRefreshAttempts) return response
 
             // Discard the 401 body so the connection is released before we retry.
             runCatching { response.readRawBytes() }
