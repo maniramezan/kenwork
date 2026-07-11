@@ -61,6 +61,7 @@ public class NetworkClient(
     private val mutex = Mutex()
     private var configuration: NetworkClientConfiguration = configuration
     private var holder: ClientHolder = ClientHolder(buildClient(configuration))
+    private var closed: Boolean = false
 
     /**
      * Swaps in a new [NetworkClientConfiguration], rebuilding the underlying engine. The previous
@@ -70,10 +71,27 @@ public class NetworkClient(
     public suspend fun updateConfiguration(newConfiguration: NetworkClientConfiguration) {
         val toClose =
             mutex.withLock {
+                check(!closed) { "NetworkClient is closed" }
                 val previous = holder
                 configuration = newConfiguration
                 holder = ClientHolder(buildClient(newConfiguration))
                 previous.takeIf { it.refCount == 0 }
+            }
+        toClose?.client?.close()
+    }
+
+    /**
+     * Closes the underlying HTTP client after in-flight requests complete. Once closed, this client
+     * cannot make requests or accept configuration updates.
+     *
+     * Calling [close] more than once is safe.
+     */
+    public suspend fun close() {
+        val toClose =
+            mutex.withLock {
+                if (closed) return
+                closed = true
+                holder.takeIf { it.refCount == 0 }
             }
         toClose?.client?.close()
     }
@@ -86,6 +104,7 @@ public class NetworkClient(
     ): T {
         val acquired =
             mutex.withLock {
+                check(!closed) { "NetworkClient is closed" }
                 holder.also { it.refCount++ } to configuration
             }
         val activeHolder = acquired.first
@@ -152,7 +171,7 @@ public class NetworkClient(
         val toClose =
             mutex.withLock {
                 activeHolder.refCount--
-                activeHolder.takeIf { it !== holder && it.refCount == 0 }
+                activeHolder.takeIf { (closed || it !== holder) && it.refCount == 0 }
             }
         toClose?.client?.close()
     }
