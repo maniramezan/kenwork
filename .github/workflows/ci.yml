@@ -18,14 +18,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           # The Gradle daemon is pinned to JDK 21 (gradle/gradle-daemon-jvm.properties);
           # Robolectric instrumenting against SDK 36 also requires it.
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@v6.2.0
 
       - name: Check (tests, detekt, ktlint, lint, coverage gate)
         run: ./gradlew check

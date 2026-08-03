@@ -38,14 +38,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: secrets
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@v6.2.0
 
       # Fail fast if the resolved tag doesn't match the version in the release-please manifest
       # (the single source of truth), so we never publish a version that's already on Maven Central.
