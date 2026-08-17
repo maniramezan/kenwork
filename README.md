@@ -21,10 +21,11 @@ free (plain constructors + a `Configuration` object).
 
 ```kotlin
 dependencies {
-    implementation("io.github.maniramezan.kenwork:network:0.2.1")
-    implementation("io.github.maniramezan.kenwork:cache:0.2.1")        // optional
-    implementation("io.github.maniramezan.kenwork:repository:0.2.1")   // optional
-    testImplementation("io.github.maniramezan.kenwork:testing:0.2.1")  // optional
+    implementation("io.github.maniramezan.kenwork:network:0.3.0")
+    implementation("io.github.maniramezan.kenwork:cache:0.3.0")        // optional
+    implementation("io.github.maniramezan.kenwork:repository:0.3.0")   // optional
+    implementation("io.github.maniramezan.kenwork:mutations:0.3.0")    // optional
+    testImplementation("io.github.maniramezan.kenwork:testing:0.3.0")  // optional
 }
 ```
 

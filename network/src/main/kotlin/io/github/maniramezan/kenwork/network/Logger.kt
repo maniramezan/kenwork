@@ -32,18 +32,18 @@ public fun interface LogSink {
 
 /**
  * An optional extension of [LogSink] for destinations that want structured key-value attributes
- * alongside the formatted [message] — e.g. to populate OpenTelemetry log record `Attributes`, or any
+ * alongside the formatted message — e.g. to populate OpenTelemetry log record `Attributes`, or any
  * other structured-logging backend, instead of only a flat string.
  *
- * This is additive: existing [LogSink] implementations are unaffected and keep receiving [message]
+ * This is additive: existing [LogSink] implementations are unaffected and keep receiving the log text
  * exactly as before via the inherited `log(level, category, message, throwable)`. [KenworkLogger]
- * calls the structured overload only when [sink] happens to implement this interface, and this
+ * calls the structured overload only when its sink implements this interface, and this
  * interface's default implementation simply forwards to the plain [LogSink.log], so implementing
  * only [log] with 4 arguments remains a complete, valid [LogSink].
  */
 public interface StructuredLogSink : LogSink {
     /**
-     * As [LogSink.log], plus [attributes] — arbitrary key-value context for this log line (e.g.
+     * As [LogSink.log], plus structured key-value context for this log line (e.g.
      * `"http.status_code" to 503`, `"kenwork.endpoint_id" to "videos/:id"`). Values are left as `Any?`
      * rather than `String` so a bridge can pass them through to a structured logging API's native
      * attribute types without stringifying first.
@@ -64,7 +64,7 @@ public interface StructuredLogSink : LogSink {
  *
  * Defaults to [LogLevel.WARNING] and an [android.util.Log]-backed sink; both are replaceable so
  * consumers can raise verbosity or forward to their own logging stack (Timber, etc.). Every method
- * accepts an optional `attributes` map, forwarded to [sink] when it implements [StructuredLogSink]
+ * accepts an optional `attributes` map, forwarded to the configured sink when it implements [StructuredLogSink]
  * (e.g. to populate OpenTelemetry log record `Attributes`); a plain [LogSink] simply never sees it.
  */
 public object KenworkLogger {
@@ -83,7 +83,7 @@ public object KenworkLogger {
     /**
      * Binary-compatibility shim: pre-0.4 consumers compiled against the two-parameter [debug]
      * matched a JVM method (and default-argument bridge) with this exact descriptor. Adding
-     * [attributes] to the primary overload above changed that descriptor, so this overload keeps
+     * an attributes parameter to the primary overload above changed that descriptor, so this overload keeps
      * the old one linkable while staying invisible to new source (see [DeprecationLevel.HIDDEN]).
      */
     @Deprecated(HIDDEN_LOG_OVERLOAD_MESSAGE, level = DeprecationLevel.HIDDEN)

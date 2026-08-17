@@ -9,6 +9,56 @@ import kotlin.test.assertTrue
 
 class ObservabilityHooksTest {
     @Test
+    @Suppress("DestructuringDeclarationWithTooManyEntries")
+    fun `copy preserves final-attempt metadata and destructuring compatibility`() {
+        val event =
+            NetworkEvent(
+                endpointId = "samples/:id",
+                method = "GET",
+                durationMs = 12,
+                attempt = 1,
+                isFinalAttempt = false,
+            )
+
+        val copied = event.copy(durationMs = 20)
+        val (endpointId, method, durationMs, _, _, _, attempt) = copied
+
+        assertEquals(false, copied.isFinalAttempt)
+        assertEquals("samples/:id", endpointId)
+        assertEquals("GET", method)
+        assertEquals(20, durationMs)
+        assertEquals(1, attempt)
+    }
+
+    @Test
+    fun `legacy NetworkEvent JVM constructor and copy bridge remain linkable`() {
+        val eventClass = NetworkEvent::class.java
+
+        eventClass.getConstructor(
+            String::class.java,
+            String::class.java,
+            Long::class.javaPrimitiveType,
+            Int::class.javaObjectType,
+            String::class.java,
+            Boolean::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+        )
+        eventClass.getDeclaredMethod(
+            "copy\$default",
+            eventClass,
+            String::class.java,
+            String::class.java,
+            Long::class.javaPrimitiveType,
+            Int::class.javaObjectType,
+            String::class.java,
+            Boolean::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+            Any::class.java,
+        )
+    }
+
+    @Test
     fun `requestHeaderProvider headers are attached to the outgoing request`(): Unit =
         runBlocking {
             var seenHeader: String? = null
