@@ -266,6 +266,108 @@ KenworkLogger.level = LogLevel.DEBUG
 KenworkLogger.sink = LogSink { level, category, message, t -> Timber.log(/* ... */) }
 ```
 
+## OpenTelemetry
+
+Kenwork has **no dependency on `opentelemetry-api`, any OTel SDK, or any exporter** — and never will,
+by design, since apps disagree on OTel version, SDK, and exporter. Instead it exposes generic,
+dependency-free hooks (`RequestInterceptor`, `RequestHeaderProvider`, the existing
+`NetworkEventListener`, and `LogSink`/`StructuredLogSink`) that carry enough information — timing,
+identifiers, attributes, start+end — for *your app* to build real OTel spans, metrics instruments, and
+log records. The same hooks work identically for Datadog, Sentry, or a homegrown backend; this recipe
+just illustrates the OTel case since it's the most demanding one (it also needs context propagation).
+
+```kotlin
+// In *your app's* code — this is where the opentelemetry-api dependency lives, not in Kenwork.
+val tracer: Tracer = openTelemetry.getTracer("com.example.app")
+val propagator: TextMapPropagator = openTelemetry.propagators.textMapPropagator
+
+// 1. Tracing: one span per attempt (retries become sibling spans; `attempt` is recorded as an
+//    attribute so they're still visibly one logical operation). Wrap your own call to
+//    `client.request(...)` in a parent span first if you want retries nested under it.
+// A plain (not `fun`) interface — `intercept`'s type parameter makes it ineligible for SAM
+// conversion, so it's implemented with an object expression rather than a lambda.
+val tracingInterceptor =
+    object : RequestInterceptor {
+        override suspend fun <T> intercept(endpoint: NetworkEndpoint, attempt: Int, proceed: suspend () -> T): T {
+            val span = tracer.spanBuilder("${endpoint.method.value} ${endpoint.path}")
+                .setAttribute("http.request.resend_count", attempt.toLong())
+                .startSpan()
+            return try {
+                span.makeCurrent().use { proceed() }
+            } catch (t: Throwable) {
+                span.recordException(t)
+                span.setStatus(StatusCode.ERROR)
+                throw t
+            } finally {
+                span.end()
+            }
+        }
+    }
+
+// 2. Context propagation: inject the span `tracingInterceptor` just made current into this same
+//    attempt's outgoing request headers (W3C traceparent/tracestate, or baggage).
+val headerProvider =
+    RequestHeaderProvider { _, _ ->
+        val headers = mutableMapOf<String, String>()
+        propagator.inject(Context.current(), headers) { carrier, key, value -> carrier?.set(key, value) }
+        headers
+    }
+
+// 3. Metrics: NetworkEvent already carries endpointId/method/statusCode/durationMs/attempt, plus
+//    isFinalAttempt so a duration histogram gets exactly one observation per logical request.
+val requestDuration = meter.histogramBuilder("http.client.request.duration").ofLongs().build()
+val requestCount = meter.counterBuilder("http.client.request.count").build()
+val eventListener =
+    NetworkEventListener { event ->
+        val attrs = Attributes.of(
+            AttributeKey.stringKey("http.route"), event.endpointId,
+            AttributeKey.stringKey("http.request.method"), event.method,
+        )
+        if (event.isFinalAttempt) requestDuration.record(event.durationMs, attrs)
+        requestCount.add(1, attrs)
+    }
+
+// 4. Logs: bridge KenworkLogger's sink to the OTel Logs API, using StructuredLogSink so the
+//    attributes KenworkLogger already carries land as real OTel `Attributes`, not a flat string.
+KenworkLogger.level = LogLevel.DEBUG
+KenworkLogger.sink = object : StructuredLogSink {
+    private val otelLogger = openTelemetry.logsBridge.get("com.example.app")
+
+    override fun log(level: LogLevel, category: LogCategory, message: String, throwable: Throwable?) =
+        log(level, category, message, throwable, emptyMap())
+
+    override fun log(
+        level: LogLevel,
+        category: LogCategory,
+        message: String,
+        throwable: Throwable?,
+        attributes: Map<String, Any?>,
+    ) {
+        val builder = otelLogger.logRecordBuilder()
+            .setSeverity(level.toOtelSeverity())
+            .setBody(message)
+        attributes.forEach { (k, v) -> builder.setAttribute(AttributeKey.stringKey(k), v.toString()) }
+        throwable?.let { builder.setAttribute(AttributeKey.stringKey("exception.message"), it.message ?: "") }
+        builder.emit()
+    }
+}
+
+val client = NetworkClient(
+    NetworkClientConfiguration(
+        requestInterceptor = tracingInterceptor,
+        requestHeaderProvider = headerProvider,
+        eventListener = eventListener,
+    ),
+)
+```
+
+`RequestInterceptor` is called once per attempt (matching `NetworkEvent.attempt`), not once for the
+whole logical request — a span per attempt is the more useful default for HTTP client tracing (each
+retry gets its own accurate start/end), and if you also want one span covering the entire retried
+request, just wrap your own call to `client.request(...)` in a parent span; retries then nest under it
+naturally via `Context.current()`. `RequestHeaderProvider` runs per attempt too, immediately before
+that attempt is sent, so it can read back whatever the interceptor just made "current."
+
 ## Testing (with the `:testing` module)
 
 ```kotlin
