@@ -106,6 +106,44 @@ class MutationQueueRestoreTest {
         }
 
     @Test
+    fun `restore preserves all records when the newest codec is not registered`() =
+        runTest {
+            val store = InMemoryMutationStore()
+            val known =
+                MutationRecord(
+                    id = "known-older",
+                    key = key.value,
+                    codecId = SetLikeStateCodec.id,
+                    payload = SetLikeStateCodec.encode(SetLikeState(42), LikeBody(true)),
+                    enqueuedAtMillis = 1L,
+                )
+            val unknown =
+                MutationRecord(
+                    id = "unknown-newest",
+                    key = key.value,
+                    codecId = "future-codec",
+                    payload = "future-payload",
+                    enqueuedAtMillis = 2L,
+                )
+            store.save(known)
+            store.save(unknown)
+            val apiClient = RecordingApiClient()
+            val queue =
+                MutationQueue(
+                    apiClient = apiClient,
+                    scope = backgroundScope,
+                    store = store,
+                    codecs = listOf(SetLikeStateCodec),
+                )
+
+            queue.restore()
+            settle()
+
+            assertTrue(apiClient.calls.isEmpty())
+            assertEquals(setOf("known-older", "unknown-newest"), store.loadAll().mapTo(mutableSetOf()) { it.id })
+        }
+
+    @Test
     fun `restore keeps only the newest persisted mutation for each key`() =
         runTest {
             val store = InMemoryMutationStore()
