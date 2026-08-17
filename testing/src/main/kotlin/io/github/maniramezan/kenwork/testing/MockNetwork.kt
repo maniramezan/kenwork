@@ -6,6 +6,8 @@ import io.github.maniramezan.kenwork.network.NetworkClient
 import io.github.maniramezan.kenwork.network.NetworkClientConfiguration
 import io.github.maniramezan.kenwork.network.NetworkEventListener
 import io.github.maniramezan.kenwork.network.ReachabilityGate
+import io.github.maniramezan.kenwork.network.RequestHeaderProvider
+import io.github.maniramezan.kenwork.network.RequestInterceptor
 import io.github.maniramezan.kenwork.network.RetryPolicy
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -37,6 +39,8 @@ public fun mockNetworkClient(
     retryPolicy: RetryPolicy = RetryPolicy.None,
     reachabilityGate: ReachabilityGate? = null,
     eventListener: NetworkEventListener? = null,
+    requestInterceptor: RequestInterceptor? = null,
+    requestHeaderProvider: RequestHeaderProvider? = null,
     handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
 ): NetworkClient =
     NetworkClient(
@@ -49,6 +53,8 @@ public fun mockNetworkClient(
             retryDelayMillis = retryDelayMillis,
             engine = MockEngine(handler),
             eventListener = eventListener,
+            requestInterceptor = requestInterceptor,
+            requestHeaderProvider = requestHeaderProvider,
         ),
     )
 

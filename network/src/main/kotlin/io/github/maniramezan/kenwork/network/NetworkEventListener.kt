@@ -13,6 +13,11 @@ package io.github.maniramezan.kenwork.network
  * @property isRetryable whether the failure is considered transient.
  * @property attempt the 0-based attempt index this event describes (0 = first try). A request that
  *   is retried emits one event per failed attempt followed by a final success/failure event.
+ * @property isFinalAttempt whether this event is the last one for its logical request — `true` for
+ *   a success, or for a failure the [RetryPolicy] declined to retry; `false` for a failed attempt
+ *   that's about to be retried. Lets a metrics bridge emit exactly one request-duration observation
+ *   per logical request (filter on `isFinalAttempt`) while still using every event, including
+ *   non-final ones, for a per-attempt/retry-count counter.
  */
 public data class NetworkEvent(
     public val endpointId: String,
@@ -22,6 +27,7 @@ public data class NetworkEvent(
     public val errorType: String? = null,
     public val isRetryable: Boolean = false,
     public val attempt: Int = 0,
+    public val isFinalAttempt: Boolean = true,
 ) {
     /** Whether this event represents a successful (2xx) request. */
     public val isSuccess: Boolean get() = errorType == null && statusCode in 200..299

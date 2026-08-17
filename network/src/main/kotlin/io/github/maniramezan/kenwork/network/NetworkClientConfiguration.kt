@@ -38,6 +38,13 @@ public val DefaultKenworkJson: Json =
  * @property engine optional explicit Ktor engine; when set, the OkHttp-specific options above are
  *   ignored (used by tests to inject a `MockEngine`). When `null`, an OkHttp engine is built.
  * @property eventListener optional telemetry sink.
+ * @property requestInterceptor optional hook wrapping each attempt (see [RequestInterceptor]) — the
+ *   place to create a tracing span with an accurate start/end and propagate its context. `null`
+ *   (the default) runs attempts directly, with no observable behavior change.
+ * @property requestHeaderProvider optional hook supplying extra headers per attempt (see
+ *   [RequestHeaderProvider]) — the place to inject trace-propagation headers (e.g. `traceparent`)
+ *   read from whatever context [requestInterceptor] made current for that attempt. `null` (the
+ *   default) adds no headers.
  */
 public class NetworkClientConfiguration(
     public val json: Json = DefaultKenworkJson,
@@ -55,6 +62,8 @@ public class NetworkClientConfiguration(
     public val sslPinning: SslPinningConfiguration? = null,
     public val engine: HttpClientEngine? = null,
     public val eventListener: NetworkEventListener? = null,
+    public val requestInterceptor: RequestInterceptor? = null,
+    public val requestHeaderProvider: RequestHeaderProvider? = null,
 ) {
     public companion object {
         public const val DEFAULT_TIMEOUT_MILLIS: Long = 30_000
