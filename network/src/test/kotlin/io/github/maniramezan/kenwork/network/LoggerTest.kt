@@ -71,4 +71,72 @@ class LoggerTest {
             AndroidLogSink.log(level, LogCategory.NETWORK, "msg", null)
         }
     }
+
+    private class CaptureStructured : StructuredLogSink {
+        val attributes = mutableListOf<Map<String, Any?>>()
+        val plainCalls = mutableListOf<String>()
+
+        override fun log(
+            level: LogLevel,
+            category: LogCategory,
+            message: String,
+            throwable: Throwable?,
+        ) {
+            plainCalls += message
+        }
+
+        override fun log(
+            level: LogLevel,
+            category: LogCategory,
+            message: String,
+            throwable: Throwable?,
+            attributes: Map<String, Any?>,
+        ) {
+            this.attributes += attributes
+        }
+    }
+
+    @Test
+    fun `a StructuredLogSink receives attributes instead of the plain overload`() {
+        val capture = CaptureStructured()
+        KenworkLogger.sink = capture
+        KenworkLogger.level = LogLevel.DEBUG
+
+        KenworkLogger.info("status", attributes = mapOf("http.status_code" to 503))
+
+        assertEquals(listOf(mapOf<String, Any?>("http.status_code" to 503)), capture.attributes)
+        assertTrue(capture.plainCalls.isEmpty())
+    }
+
+    @Test
+    fun `a plain LogSink still works and never sees attributes`() {
+        val capture = Capture()
+        KenworkLogger.sink = capture
+        KenworkLogger.level = LogLevel.DEBUG
+
+        KenworkLogger.warning("w", attributes = mapOf("k" to "v"))
+
+        assertEquals(listOf("w"), capture.messages)
+    }
+
+    @Test
+    fun `StructuredLogSink default log delegates to the plain overload`() {
+        val capture =
+            object : StructuredLogSink {
+                val calls = mutableListOf<String>()
+
+                override fun log(
+                    level: LogLevel,
+                    category: LogCategory,
+                    message: String,
+                    throwable: Throwable?,
+                ) {
+                    calls += message
+                }
+            }
+
+        capture.log(LogLevel.INFO, LogCategory.NETWORK, "delegated", null, mapOf("a" to 1))
+
+        assertEquals(listOf("delegated"), capture.calls)
+    }
 }

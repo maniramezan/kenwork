@@ -132,8 +132,11 @@ public class NetworkClient(
         while (true) {
             val mapped: NetworkError =
                 try {
-                    val response = executeWithAuth(client, config, endpoint, body, bodyType)
-                    val validated = validateOrThrow(response)
+                    val validated =
+                        runIntercepted(config, endpoint, attempt) {
+                            val response = executeWithAuth(client, config, endpoint, body, bodyType, attempt)
+                            validateOrThrow(response)
+                        }
                     config.eventListener?.onEvent(
                         NetworkEvent(
                             endpointId = endpoint.endpointId(),
@@ -152,12 +155,25 @@ public class NetworkClient(
                     mapException(error)
                 }
             val delayMillis = config.retryPolicy.retryDelayMillis(attempt + 1, endpoint.method, mapped)
-            config.eventListener?.onEvent(mapped.toEvent(endpoint, elapsedMs(startNs), attempt))
+            config.eventListener?.onEvent(
+                mapped.toEvent(endpoint, elapsedMs(startNs), attempt, isFinalAttempt = delayMillis == null),
+            )
             if (delayMillis == null) throw mapped
             attempt++
             awaitReachable(config)
             if (delayMillis > 0) delay(delayMillis)
         }
+    }
+
+    /** Runs [block] through [NetworkClientConfiguration.requestInterceptor], if one is configured. */
+    private suspend fun <T> runIntercepted(
+        config: NetworkClientConfiguration,
+        endpoint: NetworkEndpoint,
+        attempt: Int,
+        block: suspend () -> T,
+    ): T {
+        val interceptor = config.requestInterceptor ?: return block()
+        return interceptor.intercept(endpoint, attempt, block)
     }
 
     /** Parks (bounded) until connectivity returns, when a [ReachabilityGate] is configured. */
@@ -182,24 +198,25 @@ public class NetworkClient(
         endpoint: NetworkEndpoint,
         body: Any?,
         bodyType: TypeInfo?,
+        attempt: Int,
     ): HttpResponse {
         val provider = config.authorizationProvider
         val usesProviderAuthorization = endpoint.authorization == AuthorizationType.None
-        var attempt = 0
+        var authAttempt = 0
         while (true) {
             val auth =
                 endpoint.authorization
                     .takeUnless { it == AuthorizationType.None }
                     ?: provider?.currentAuthorization()
                     ?: AuthorizationType.None
-            val response = performCall(client, endpoint, body, bodyType, auth)
+            val response = performCall(client, endpoint, body, bodyType, auth, attempt, config.requestHeaderProvider)
             if (response.status != HttpStatusCode.Unauthorized) return response
-            if (!usesProviderAuthorization || provider == null || attempt >= config.maxAuthRefreshAttempts) return response
+            if (!usesProviderAuthorization || provider == null || authAttempt >= config.maxAuthRefreshAttempts) return response
 
             // Discard the 401 body so the connection is released before we retry.
             runCatching { response.readRawBytes() }
             if (!provider.refreshAuthorizationIfNeeded()) throw NetworkError.AuthorizationRefreshFailed
-            attempt++
+            authAttempt++
             if (config.retryDelayMillis > 0) delay(config.retryDelayMillis)
         }
     }
@@ -210,6 +227,8 @@ public class NetworkClient(
         body: Any?,
         bodyType: TypeInfo?,
         auth: AuthorizationType,
+        attempt: Int,
+        headerProvider: RequestHeaderProvider?,
     ): HttpResponse =
         client.request {
             method = KtorHttpMethod.parse(endpoint.method.value)
@@ -218,6 +237,12 @@ public class NetworkClient(
                 endpoint.queryItems?.forEach { (name, value) -> parameters.append(name, value) }
             }
             endpoint.headers?.forEach { (name, value) -> header(name, value) }
+            headerProvider?.headersFor(endpoint, attempt)?.forEach { (name, value) ->
+                // Replace rather than append, so a provider-supplied header (e.g. a fresh
+                // `traceparent` per attempt) fully overrides one already set by the endpoint.
+                headers.remove(name)
+                header(name, value)
+            }
             auth.applyTo(this)
             when {
                 bodyType != null -> {
@@ -342,6 +367,7 @@ private fun NetworkError.toEvent(
     endpoint: NetworkEndpoint,
     durationMs: Long,
     attempt: Int,
+    isFinalAttempt: Boolean,
 ): NetworkEvent {
     val statusCode =
         when (this) {
@@ -372,6 +398,7 @@ private fun NetworkError.toEvent(
         errorType = this::class.simpleName,
         isRetryable = retryable,
         attempt = attempt,
+        isFinalAttempt = isFinalAttempt,
     )
 }
 

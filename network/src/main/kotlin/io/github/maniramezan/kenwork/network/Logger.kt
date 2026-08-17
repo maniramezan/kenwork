@@ -31,10 +31,41 @@ public fun interface LogSink {
 }
 
 /**
+ * An optional extension of [LogSink] for destinations that want structured key-value attributes
+ * alongside the formatted [message] — e.g. to populate OpenTelemetry log record `Attributes`, or any
+ * other structured-logging backend, instead of only a flat string.
+ *
+ * This is additive: existing [LogSink] implementations are unaffected and keep receiving [message]
+ * exactly as before via the inherited `log(level, category, message, throwable)`. [KenworkLogger]
+ * calls the structured overload only when [sink] happens to implement this interface, and this
+ * interface's default implementation simply forwards to the plain [LogSink.log], so implementing
+ * only [log] with 4 arguments remains a complete, valid [LogSink].
+ */
+public interface StructuredLogSink : LogSink {
+    /**
+     * As [LogSink.log], plus [attributes] — arbitrary key-value context for this log line (e.g.
+     * `"http.status_code" to 503`, `"kenwork.endpoint_id" to "videos/:id"`). Values are left as `Any?`
+     * rather than `String` so a bridge can pass them through to a structured logging API's native
+     * attribute types without stringifying first.
+     */
+    public fun log(
+        level: LogLevel,
+        category: LogCategory,
+        message: String,
+        throwable: Throwable?,
+        attributes: Map<String, Any?>,
+    ) {
+        log(level, category, message, throwable)
+    }
+}
+
+/**
  * Lightweight, dependency-free logging facade for the library. Mirrors SwiftyNetwork's `Logger`.
  *
  * Defaults to [LogLevel.WARNING] and an [android.util.Log]-backed sink; both are replaceable so
- * consumers can raise verbosity or forward to their own logging stack (Timber, etc.).
+ * consumers can raise verbosity or forward to their own logging stack (Timber, etc.). Every method
+ * accepts an optional `attributes` map, forwarded to [sink] when it implements [StructuredLogSink]
+ * (e.g. to populate OpenTelemetry log record `Attributes`); a plain [LogSink] simply never sees it.
  */
 public object KenworkLogger {
     @Volatile
@@ -46,32 +77,42 @@ public object KenworkLogger {
     public fun debug(
         message: String,
         category: LogCategory = LogCategory.NETWORK,
-    ): Unit = emit(LogLevel.DEBUG, category, message, null)
+        attributes: Map<String, Any?> = emptyMap(),
+    ): Unit = emit(LogLevel.DEBUG, category, message, null, attributes)
 
     public fun info(
         message: String,
         category: LogCategory = LogCategory.NETWORK,
-    ): Unit = emit(LogLevel.INFO, category, message, null)
+        attributes: Map<String, Any?> = emptyMap(),
+    ): Unit = emit(LogLevel.INFO, category, message, null, attributes)
 
     public fun warning(
         message: String,
         category: LogCategory = LogCategory.NETWORK,
-    ): Unit = emit(LogLevel.WARNING, category, message, null)
+        attributes: Map<String, Any?> = emptyMap(),
+    ): Unit = emit(LogLevel.WARNING, category, message, null, attributes)
 
     public fun error(
         message: String,
         throwable: Throwable? = null,
         category: LogCategory = LogCategory.NETWORK,
-    ): Unit = emit(LogLevel.ERROR, category, message, throwable)
+        attributes: Map<String, Any?> = emptyMap(),
+    ): Unit = emit(LogLevel.ERROR, category, message, throwable, attributes)
 
     private fun emit(
         lineLevel: LogLevel,
         category: LogCategory,
         message: String,
         throwable: Throwable?,
+        attributes: Map<String, Any?>,
     ) {
         if (level == LogLevel.OFF || lineLevel.ordinal > level.ordinal) return
-        sink.log(lineLevel, category, message, throwable)
+        val currentSink = sink
+        if (currentSink is StructuredLogSink) {
+            currentSink.log(lineLevel, category, message, throwable, attributes)
+        } else {
+            currentSink.log(lineLevel, category, message, throwable)
+        }
     }
 }
 

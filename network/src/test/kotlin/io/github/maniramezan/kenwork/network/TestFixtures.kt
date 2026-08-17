@@ -74,6 +74,8 @@ fun testClient(
             backoffBaseMillis = retryBackoffBaseMillis,
         ),
     eventListener: NetworkEventListener? = null,
+    requestInterceptor: RequestInterceptor? = null,
+    requestHeaderProvider: RequestHeaderProvider? = null,
     handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
 ): NetworkClient =
     NetworkClient(
@@ -84,5 +86,7 @@ fun testClient(
             retryDelayMillis = 0,
             engine = MockEngine(handler),
             eventListener = eventListener,
+            requestInterceptor = requestInterceptor,
+            requestHeaderProvider = requestHeaderProvider,
         ),
     )
