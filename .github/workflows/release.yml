@@ -82,6 +82,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Without a checkout here, target_commitish defaults to the default branch
+      # (not the tag), which breaks generate_release_notes' previous-tag lookup.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag }}
