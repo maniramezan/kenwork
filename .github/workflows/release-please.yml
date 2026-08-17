@@ -25,12 +25,14 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       # Optional GitHub App token so the release PR triggers CI and can be auto-merged.
-      # Falls back to GITHUB_TOKEN when the App secrets are not configured.
+      # Falls back to GITHUB_TOKEN when the App credentials are not configured.
+      # client-id is the App's public Client ID (Iv23...), not a secret; private-key
+      # must be a plain repo secret (not environment-scoped) so this ungated job can read it.
       - uses: actions/create-github-app-token@v3
         id: app-token
         continue-on-error: true
         with:
-          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          client-id: ${{ vars.RELEASE_PLEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
 
       - uses: googleapis/release-please-action@v5
