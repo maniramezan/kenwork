@@ -65,6 +65,53 @@ public class NetworkClientConfiguration(
     public val requestInterceptor: RequestInterceptor? = null,
     public val requestHeaderProvider: RequestHeaderProvider? = null,
 ) {
+    /**
+     * Binary-compatibility shim: pre-0.4 consumers compiled against the constructor without
+     * [requestInterceptor] / [requestHeaderProvider] matched a JVM constructor (and
+     * default-argument bridge) with this exact parameter list. Kept linkable for them via
+     * [DeprecationLevel.HIDDEN], which also keeps it invisible to (and out of ambiguity with) new
+     * source — always resolves to the primary constructor above.
+     */
+    @Deprecated(
+        "Binary-compatibility shim for pre-0.4 callers; use the primary constructor.",
+        level = DeprecationLevel.HIDDEN,
+    )
+    public constructor(
+        json: Json = DefaultKenworkJson,
+        authorizationProvider: AuthorizationProvider? = null,
+        maxAuthRefreshAttempts: Int = 1,
+        retryPolicy: RetryPolicy = DefaultRetryPolicy(),
+        reachabilityGate: ReachabilityGate? = null,
+        reachabilityWaitMillis: Long = DEFAULT_REACHABILITY_WAIT_MILLIS,
+        timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+        retryDelayMillis: Long = DEFAULT_RETRY_DELAY_MILLIS,
+        logLevel: LogLevel = LogLevel.WARNING,
+        engineInterceptors: List<Interceptor> = emptyList(),
+        okHttpConfig: (OkHttpClient.Builder.() -> Unit)? = null,
+        okHttpCache: Cache? = null,
+        sslPinning: SslPinningConfiguration? = null,
+        engine: HttpClientEngine? = null,
+        eventListener: NetworkEventListener? = null,
+    ) : this(
+        json = json,
+        authorizationProvider = authorizationProvider,
+        maxAuthRefreshAttempts = maxAuthRefreshAttempts,
+        retryPolicy = retryPolicy,
+        reachabilityGate = reachabilityGate,
+        reachabilityWaitMillis = reachabilityWaitMillis,
+        timeoutMillis = timeoutMillis,
+        retryDelayMillis = retryDelayMillis,
+        logLevel = logLevel,
+        engineInterceptors = engineInterceptors,
+        okHttpConfig = okHttpConfig,
+        okHttpCache = okHttpCache,
+        sslPinning = sslPinning,
+        engine = engine,
+        eventListener = eventListener,
+        requestInterceptor = null,
+        requestHeaderProvider = null,
+    )
+
     public companion object {
         public const val DEFAULT_TIMEOUT_MILLIS: Long = 30_000
         public const val DEFAULT_RETRY_DELAY_MILLIS: Long = 1_000

@@ -58,6 +58,41 @@ public fun mockNetworkClient(
         ),
     )
 
+/**
+ * Binary-compatibility shim: pre-0.4 consumers compiled against the overload without
+ * [requestInterceptor] / [requestHeaderProvider] matched a JVM method (and default-argument
+ * bridge) with this exact parameter list. Kept linkable for them via [DeprecationLevel.HIDDEN],
+ * which also keeps it invisible to (and out of ambiguity with) new source — always resolves to
+ * the primary overload above.
+ */
+@Suppress("LongParameterList")
+@Deprecated(
+    "Binary-compatibility shim for pre-0.4 callers; use the primary overload.",
+    level = DeprecationLevel.HIDDEN,
+)
+public fun mockNetworkClient(
+    json: Json = DefaultKenworkJson,
+    authorizationProvider: AuthorizationProvider? = null,
+    maxAuthRefreshAttempts: Int = 1,
+    retryDelayMillis: Long = 0,
+    retryPolicy: RetryPolicy = RetryPolicy.None,
+    reachabilityGate: ReachabilityGate? = null,
+    eventListener: NetworkEventListener? = null,
+    handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
+): NetworkClient =
+    mockNetworkClient(
+        json = json,
+        authorizationProvider = authorizationProvider,
+        maxAuthRefreshAttempts = maxAuthRefreshAttempts,
+        retryDelayMillis = retryDelayMillis,
+        retryPolicy = retryPolicy,
+        reachabilityGate = reachabilityGate,
+        eventListener = eventListener,
+        requestInterceptor = null,
+        requestHeaderProvider = null,
+        handler = handler,
+    )
+
 /** Responds with a JSON [body] and the given [status]. */
 public fun MockRequestHandleScope.jsonResponse(
     body: String,

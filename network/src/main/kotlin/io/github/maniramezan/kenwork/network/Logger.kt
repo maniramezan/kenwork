@@ -80,11 +80,30 @@ public object KenworkLogger {
         attributes: Map<String, Any?> = emptyMap(),
     ): Unit = emit(LogLevel.DEBUG, category, message, null, attributes)
 
+    /**
+     * Binary-compatibility shim: pre-0.4 consumers compiled against the two-parameter [debug]
+     * matched a JVM method (and default-argument bridge) with this exact descriptor. Adding
+     * [attributes] to the primary overload above changed that descriptor, so this overload keeps
+     * the old one linkable while staying invisible to new source (see [DeprecationLevel.HIDDEN]).
+     */
+    @Deprecated(HIDDEN_LOG_OVERLOAD_MESSAGE, level = DeprecationLevel.HIDDEN)
+    public fun debug(
+        message: String,
+        category: LogCategory = LogCategory.NETWORK,
+    ): Unit = debug(message, category, emptyMap())
+
     public fun info(
         message: String,
         category: LogCategory = LogCategory.NETWORK,
         attributes: Map<String, Any?> = emptyMap(),
     ): Unit = emit(LogLevel.INFO, category, message, null, attributes)
+
+    /** Binary-compatibility shim; see the [debug] overload of the same shape for why this exists. */
+    @Deprecated(HIDDEN_LOG_OVERLOAD_MESSAGE, level = DeprecationLevel.HIDDEN)
+    public fun info(
+        message: String,
+        category: LogCategory = LogCategory.NETWORK,
+    ): Unit = info(message, category, emptyMap())
 
     public fun warning(
         message: String,
@@ -92,12 +111,27 @@ public object KenworkLogger {
         attributes: Map<String, Any?> = emptyMap(),
     ): Unit = emit(LogLevel.WARNING, category, message, null, attributes)
 
+    /** Binary-compatibility shim; see the [debug] overload of the same shape for why this exists. */
+    @Deprecated(HIDDEN_LOG_OVERLOAD_MESSAGE, level = DeprecationLevel.HIDDEN)
+    public fun warning(
+        message: String,
+        category: LogCategory = LogCategory.NETWORK,
+    ): Unit = warning(message, category, emptyMap())
+
     public fun error(
         message: String,
         throwable: Throwable? = null,
         category: LogCategory = LogCategory.NETWORK,
         attributes: Map<String, Any?> = emptyMap(),
     ): Unit = emit(LogLevel.ERROR, category, message, throwable, attributes)
+
+    /** Binary-compatibility shim; see the [debug] overload of the same shape for why this exists. */
+    @Deprecated(HIDDEN_LOG_OVERLOAD_MESSAGE, level = DeprecationLevel.HIDDEN)
+    public fun error(
+        message: String,
+        throwable: Throwable? = null,
+        category: LogCategory = LogCategory.NETWORK,
+    ): Unit = error(message, throwable, category, emptyMap())
 
     private fun emit(
         lineLevel: LogLevel,
@@ -115,6 +149,9 @@ public object KenworkLogger {
         }
     }
 }
+
+private const val HIDDEN_LOG_OVERLOAD_MESSAGE =
+    "Binary-compatibility shim for pre-0.4 callers; use the attributes-aware overload."
 
 /** Default [LogSink] writing to Android's Logcat under the `kenwork.<category>` tag. */
 public object AndroidLogSink : LogSink {
