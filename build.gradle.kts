@@ -37,6 +37,7 @@ dependencies {
     dokka(project(":network"))
     dokka(project(":cache"))
     dokka(project(":repository"))
+    dokka(project(":mutations"))
     dokka(project(":testing"))
 }
 
