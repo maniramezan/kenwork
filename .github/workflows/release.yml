@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: secrets
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
       - uses: actions/setup-java@v5
