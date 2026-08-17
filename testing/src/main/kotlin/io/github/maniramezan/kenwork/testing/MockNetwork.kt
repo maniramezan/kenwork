@@ -29,6 +29,8 @@ import kotlinx.serialization.json.Json
  *
  * @param retryPolicy retry behavior; off by default for deterministic tests.
  * @param reachabilityGate optional connectivity gate exercised on retries (see [FakeReachabilityGate]).
+ * The optional request interceptor wraps each attempt for tracing or similar instrumentation. The
+ * optional request-header provider supplies propagation or other dynamic headers for each attempt.
  */
 @Suppress("LongParameterList")
 public fun mockNetworkClient(
@@ -60,7 +62,7 @@ public fun mockNetworkClient(
 
 /**
  * Binary-compatibility shim: pre-0.4 consumers compiled against the overload without
- * [requestInterceptor] / [requestHeaderProvider] matched a JVM method (and default-argument
+ * the tracing parameters matched a JVM method (and default-argument
  * bridge) with this exact parameter list. Kept linkable for them via [DeprecationLevel.HIDDEN],
  * which also keeps it invisible to (and out of ambiguity with) new source — always resolves to
  * the primary overload above.

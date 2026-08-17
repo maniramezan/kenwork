@@ -136,10 +136,14 @@ public class MutationQueue(
             .values
             .forEach { records ->
                 val record = records.maxWith(compareBy(MutationRecord::enqueuedAtMillis).thenBy(MutationRecord::id))
-                records.filterNot { it === record }.forEach { store.remove(it.id) }
+
                 @Suppress("UNCHECKED_CAST")
                 val codec = codecsById[record.codecId] as? MutationCodec<Any> ?: return@forEach
                 val decoded = codec.decode(record.payload)
+                // Do not discard anything until the newest desired state is known to be
+                // recoverable. If its codec is unavailable (or decoding throws), a future app
+                // version must still be able to restore it and then clean up its predecessors.
+                records.filterNot { it === record }.forEach { store.remove(it.id) }
                 val key = MutationKey(record.key)
                 val mutation = QueuedMutation(record.id, key, decoded.endpoint, decoded.body, decoded.bodyType)
                 workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
