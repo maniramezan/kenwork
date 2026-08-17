@@ -32,6 +32,12 @@ internal fun Project.configureAndroidLibrary(extension: LibraryExtension) {
             unitTests {
                 isIncludeAndroidResources = true
                 isReturnDefaultValues = true
+                // Robolectric's default repo1.maven.org endpoint is independently fetched at
+                // test runtime and is prone to rate-limiting shared CI runners. Use Maven
+                // Central's canonical endpoint, matching Gradle's mavenCentral() repository.
+                all {
+                    it.systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+                }
             }
         }
     }

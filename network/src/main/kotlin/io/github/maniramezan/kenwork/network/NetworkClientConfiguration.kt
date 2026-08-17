@@ -43,7 +43,7 @@ public val DefaultKenworkJson: Json =
  *   (the default) runs attempts directly, with no observable behavior change.
  * @property requestHeaderProvider optional hook supplying extra headers per attempt (see
  *   [RequestHeaderProvider]) — the place to inject trace-propagation headers (e.g. `traceparent`)
- *   read from whatever context [requestInterceptor] made current for that attempt. `null` (the
+ *   read from whatever context the request interceptor made current for that attempt. `null` (the
  *   default) adds no headers.
  */
 public class NetworkClientConfiguration(
@@ -67,7 +67,7 @@ public class NetworkClientConfiguration(
 ) {
     /**
      * Binary-compatibility shim: pre-0.4 consumers compiled against the constructor without
-     * [requestInterceptor] / [requestHeaderProvider] matched a JVM constructor (and
+     * the observability-hook parameters matched a JVM constructor (and
      * default-argument bridge) with this exact parameter list. Kept linkable for them via
      * [DeprecationLevel.HIDDEN], which also keeps it invisible to (and out of ambiguity with) new
      * source — always resolves to the primary constructor above.

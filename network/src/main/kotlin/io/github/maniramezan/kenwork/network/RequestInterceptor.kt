@@ -5,7 +5,7 @@ package io.github.maniramezan.kenwork.network
  * start a span/segment with an accurate timestamp, propagate the currently active context, and
  * record the outcome, all without [NetworkClient] depending on any specific tracing API.
  *
- * [NetworkClient] invokes [intercept] once per attempt: [attempt] is the same 0-based index carried
+ * [NetworkClient] invokes [intercept] once per attempt: the attempt argument is the same 0-based index carried
  * by [NetworkEvent.attempt], so a retried request calls [intercept] once per attempt rather than once
  * for the whole logical request. This is a deliberate choice — a span per attempt mirrors common HTTP
  * client tracing conventions (retries become sibling spans, each attempt gets its own accurate
@@ -15,11 +15,11 @@ package io.github.maniramezan.kenwork.network
  * still recorded, so a consumer can set it as a span attribute (e.g. `http.request.resend_count`) to
  * link retries as part of one logical operation.
  *
- * A typical implementation starts a span, calls [proceed] (recording an exception if it throws), and
+ * A typical implementation starts a span, calls the supplied proceed function (recording an exception if it throws), and
  * ends the span in a `finally` block — see the "OpenTelemetry" recipe in `docs/cookbook.md` for a
  * worked example. Combine with [RequestHeaderProvider] when the attempt also needs to propagate
  * context onto the outgoing request (e.g. a W3C `traceparent` header): start the span here, before
- * calling [proceed], so it's the "current" span by the time [RequestHeaderProvider.headersFor] runs
+ * calling it, so it's the "current" span by the time [RequestHeaderProvider.headersFor] runs
  * for the same attempt.
  *
  * This is a plain (not `fun`) interface — [intercept]'s type parameter makes it ineligible for SAM
@@ -29,7 +29,7 @@ package io.github.maniramezan.kenwork.network
 public interface RequestInterceptor {
     /**
      * Called once per attempt, wrapping the work that executes it. Implementations must call
-     * [proceed] to actually perform the attempt (typically exactly once) and return its result;
+     * the supplied proceed function to actually perform the attempt (typically exactly once) and return its result;
      * failing to call it — or swallowing an exception it throws — will silently break the request.
      *
      * @param endpoint the endpoint being called.
