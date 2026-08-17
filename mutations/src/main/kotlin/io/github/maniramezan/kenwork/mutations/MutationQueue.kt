@@ -10,7 +10,6 @@ import io.ktor.util.reflect.typeInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -132,14 +130,20 @@ public class MutationQueue(
      * untouched in [store] (so a later app version that registers the codec can still recover them).
      */
     public suspend fun restore() {
-        store.loadAll().forEach { record ->
-            @Suppress("UNCHECKED_CAST")
-            val codec = codecsById[record.codecId] as? MutationCodec<Any> ?: return@forEach
-            val decoded = codec.decode(record.payload)
-            val key = MutationKey(record.key)
-            val mutation = QueuedMutation(record.id, key, decoded.endpoint, decoded.body, decoded.bodyType)
-            workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
-        }
+        store
+            .loadAll()
+            .groupBy(MutationRecord::key)
+            .values
+            .forEach { records ->
+                val record = records.maxWith(compareBy(MutationRecord::enqueuedAtMillis).thenBy(MutationRecord::id))
+                records.filterNot { it === record }.forEach { store.remove(it.id) }
+                @Suppress("UNCHECKED_CAST")
+                val codec = codecsById[record.codecId] as? MutationCodec<Any> ?: return@forEach
+                val decoded = codec.decode(record.payload)
+                val key = MutationKey(record.key)
+                val mutation = QueuedMutation(record.id, key, decoded.endpoint, decoded.body, decoded.bodyType)
+                workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
+            }
     }
 
     private fun statusFlowFor(key: MutationKey): MutableStateFlow<MutationStatus?> = statuses.getOrPut(key) { MutableStateFlow(null) }
@@ -167,19 +171,26 @@ private class KeyWorker(
     private val scope: CoroutineScope,
 ) {
     private val latest = MutableStateFlow<Enqueued<*>?>(null)
-    private val jobMutex = Mutex()
-    private var job: Job? = null
+    private val stateMutex = Mutex()
+    private var workerRunning = false
 
     suspend fun submit(enqueued: Enqueued<*>) {
-        val superseded = latest.getAndUpdate { enqueued }
-        statusFlow.value = MutationStatus.Pending
+        var superseded: Enqueued<*>? = null
+        var startWorker = false
+        stateMutex.withLock {
+            superseded = latest.value
+            latest.value = enqueued
+            statusFlow.value = MutationStatus.Pending
+            if (!workerRunning) {
+                workerRunning = true
+                startWorker = true
+            }
+        }
         if (superseded != null && superseded !== enqueued) {
             superseded.record?.let { store.remove(it.id) }
         }
-        jobMutex.withLock {
-            if (job?.isActive != true) {
-                job = scope.launch { runLoop() }
-            }
+        if (startWorker) {
+            scope.launch { runLoop() }
         }
     }
 
@@ -187,8 +198,17 @@ private class KeyWorker(
         while (true) {
             val current = latest.value ?: return
             processOne(current)
-            if (latest.value === current) {
-                latest.value = null
+            val finished =
+                stateMutex.withLock {
+                    if (latest.value === current) {
+                        latest.value = null
+                        workerRunning = false
+                        true
+                    } else {
+                        false
+                    }
+                }
+            if (finished) {
                 return
             }
             // A newer mutation replaced `current` while we were working it; loop picks it up.
@@ -198,7 +218,7 @@ private class KeyWorker(
     // Each branch below is a guard clause for a distinct terminal/loop-continuation outcome
     // (superseded, succeeded, gave up, or scheduled a retry) — splitting it up would obscure the
     // state machine rather than clarify it.
-    @Suppress("ReturnCount")
+    @Suppress("ReturnCount", "NestedBlockDepth")
     private suspend fun processOne(enqueued: Enqueued<*>) {
         @Suppress("UNCHECKED_CAST")
         val active = enqueued as Enqueued<Any>
@@ -208,23 +228,33 @@ private class KeyWorker(
 
             val failure = attemptOnce(active)
             if (failure == null) {
-                statusFlow.value = MutationStatus.Succeeded
-                active.record?.let { store.remove(it.id) }
+                val stillCurrent = updateStatusIfCurrent(enqueued, MutationStatus.Succeeded)
+                if (stillCurrent) active.record?.let { store.remove(it.id) }
                 return
             }
 
             val delayMillis = active.retryPolicy.retryDelayMillis(attempt + 1, active.mutation.endpoint.method, failure)
             if (delayMillis == null) {
-                statusFlow.value = MutationStatus.Failed(failure)
-                active.record?.let { store.remove(it.id) }
+                val stillCurrent = updateStatusIfCurrent(enqueued, MutationStatus.Failed(failure))
+                if (stillCurrent) active.record?.let { store.remove(it.id) }
                 return
             }
 
             attempt++
-            statusFlow.value = MutationStatus.Retrying(attempt, failure)
+            if (!updateStatusIfCurrent(enqueued, MutationStatus.Retrying(attempt, failure))) return
             if (awaitDelayOrSupersede(delayMillis, enqueued)) return
         }
     }
+
+    private suspend fun updateStatusIfCurrent(
+        enqueued: Enqueued<*>,
+        status: MutationStatus,
+    ): Boolean =
+        stateMutex.withLock {
+            if (latest.value !== enqueued) return@withLock false
+            statusFlow.value = status
+            true
+        }
 
     private suspend fun attemptOnce(active: Enqueued<Any>): NetworkError? =
         try {

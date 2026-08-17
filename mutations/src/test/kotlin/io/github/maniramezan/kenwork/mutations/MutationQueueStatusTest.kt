@@ -3,6 +3,8 @@ package io.github.maniramezan.kenwork.mutations
 import app.cash.turbine.test
 import io.github.maniramezan.kenwork.network.DefaultRetryPolicy
 import io.github.maniramezan.kenwork.network.NetworkError
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,5 +81,30 @@ class MutationQueueStatusTest {
                 assertIs<MutationStatus.Failed>(failed)
                 assertIs<NetworkError.ServerError>(failed.error)
             }
+        }
+
+    @Test
+    fun `superseded in-flight request cannot overwrite replacement Pending status`() =
+        runTest {
+            val firstMayComplete = CompletableDeferred<Unit>()
+            val secondMayComplete = CompletableDeferred<Unit>()
+            val apiClient =
+                RecordingApiClient { _, index ->
+                    if (index == 0) firstMayComplete.await() else secondMayComplete.await()
+                }
+            val queue = MutationQueue(apiClient = apiClient, scope = backgroundScope)
+            val key = MutationKey.of("like", "video", 4)
+
+            queue.enqueue(key, SetLikeState(4), LikeBody(true))
+            runCurrent()
+            queue.enqueue(key, SetLikeState(4), LikeBody(false))
+
+            firstMayComplete.complete(Unit)
+            runCurrent()
+
+            assertEquals(MutationStatus.Pending, queue.statusFlow(key).value)
+            secondMayComplete.complete(Unit)
+            settle()
+            assertEquals(MutationStatus.Succeeded, queue.statusFlow(key).value)
         }
 }
