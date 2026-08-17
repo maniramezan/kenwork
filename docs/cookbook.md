@@ -153,6 +153,76 @@ repo.stream(GetVideo(42), key, CachePolicy.ReturnCacheElseLoad)
 cache.changes().collect { change -> /* CacheChange.Updated / Removed / Cleared */ }
 ```
 
+## Mutations (fire-and-forget writes with retry)
+
+The `:mutations` module is for "forgivable" writes — likes, follows, and similar mutations a
+ViewModel wants to apply optimistically and fire off in the background, instead of `await`ing them
+inline and blocking the UI on a round trip. `MutationQueue` enqueues and returns immediately; the
+actual `ApiClient.request` call (and any retries) run on a `CoroutineScope` you own, so the
+mutation survives the calling screen going away.
+
+```kotlin
+val queue = MutationQueue(apiClient = client, scope = appScope)
+
+// Returns immediately. POST/PATCH aren't retried by NetworkClient's own DefaultRetryPolicy, but
+// MutationQueue's default retryPolicy opts non-idempotent methods back in (see below).
+queue.enqueue(MutationKey.of("like", "video", 42), SetLikeState(videoId = 42), LikeBody(liked = true))
+
+// Reflect outcome in the UI (rollback logic is yours — this only reports what happened).
+queue.statusFlow(MutationKey.of("like", "video", 42)).collect { status ->
+    when (status) {
+        is MutationStatus.Failed -> rollbackOptimisticLike()
+        MutationStatus.Succeeded, is MutationStatus.Retrying, MutationStatus.Pending, null -> Unit
+    }
+}
+```
+
+**Coalescing.** Enqueueing under the same `MutationKey` while a mutation is still pending/retrying
+replaces it — including cancelling an in-progress retry backoff — so rapidly toggling like/unlike
+collapses to one call for the final desired state instead of replaying every intermediate one.
+
+**Retry.** `MutationQueue` reuses `RetryPolicy`, but as its own setting — distinct from
+`NetworkClientConfiguration.retryPolicy` — so opting a mutation into retrying `POST`/`PATCH` never
+loosens the underlying `NetworkClient`'s own (conservative) default:
+
+```kotlin
+MutationQueue(
+    apiClient = client,
+    scope = appScope,
+    defaultRetryPolicy = DefaultRetryPolicy(retryNonIdempotent = true),   // the default
+)
+
+// Or opt a single mutation in/out, overriding the queue default:
+queue.enqueue(key, endpoint, body, retryPolicy = DefaultRetryPolicy(retryNonIdempotent = true))
+```
+
+**Persistence.** By default mutations are in-memory only (lost on process death). To survive a
+relaunch, describe the mutation as data instead of a closure — implement a `MutationCodec` that
+turns your endpoint + body into JSON and back, and pass it to `enqueue`:
+
+```kotlin
+object SetLikeStateCodec : MutationCodec<LikeBody> {
+    override val id = "set-like-state"
+    override fun encode(endpoint: NetworkEndpoint, body: LikeBody?) =
+        Json.encodeToString(Payload((endpoint as SetLikeState).videoId, body?.liked ?: false))
+    override fun decode(payload: String): DecodedMutation<LikeBody> {
+        val p = Json.decodeFromString<Payload>(payload)
+        return DecodedMutation(SetLikeState(p.videoId), LikeBody(p.liked), null)
+    }
+    @Serializable private data class Payload(val videoId: Int, val liked: Boolean)
+}
+
+queue.enqueue(key, SetLikeState(42), LikeBody(true), codec = SetLikeStateCodec)
+
+// At app startup, with the same store + every codec you enqueue with registered upfront:
+val queue = MutationQueue(apiClient = client, scope = appScope, store = durableStore, codecs = listOf(SetLikeStateCodec))
+queue.restore()   // replays whatever didn't finish before the process died
+```
+
+`InMemoryMutationStore` is the shipped default; implement `MutationStore` (three suspend
+functions: `save`/`remove`/`loadAll` over the fully-`@Serializable` `MutationRecord`) against
+SQLDelight/Room/DataStore for real durability.
+
 ## SSL pinning
 
 ```kotlin

@@ -23,4 +23,5 @@ rootProject.name = "kenwork"
 include(":network")
 include(":cache")
 include(":repository")
+include(":mutations")
 include(":testing")
