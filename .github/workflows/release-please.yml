@@ -49,7 +49,7 @@ jobs:
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-          gh pr merge "$PR_NUMBER" --squash --auto
+          gh pr merge "$PR_NUMBER" --squash --auto --repo "$GITHUB_REPOSITORY"
 
   # Publish in-line with release creation (the tag push can't fire a workflow itself).
   publish:
