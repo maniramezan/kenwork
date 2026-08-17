@@ -31,6 +31,27 @@ public data class NetworkEvent(
 ) {
     /** Whether this event represents a successful (2xx) request. */
     public val isSuccess: Boolean get() = errorType == null && statusCode in 200..299
+
+    /**
+     * Binary-compatibility shim: pre-0.4 consumers compiled against the constructor without
+     * [isFinalAttempt] matched a JVM constructor (and default-argument bridge) with this exact
+     * parameter list. Kept linkable for them via [DeprecationLevel.HIDDEN], which also keeps it
+     * invisible to (and out of ambiguity with) new source — always resolves to the primary
+     * constructor above, with [isFinalAttempt] defaulting to `true`.
+     */
+    @Deprecated(
+        "Binary-compatibility shim for pre-0.4 callers; use the primary constructor.",
+        level = DeprecationLevel.HIDDEN,
+    )
+    public constructor(
+        endpointId: String,
+        method: String,
+        durationMs: Long,
+        statusCode: Int? = null,
+        errorType: String? = null,
+        isRetryable: Boolean = false,
+        attempt: Int = 0,
+    ) : this(endpointId, method, durationMs, statusCode, errorType, isRetryable, attempt, true)
 }
 
 /** Receives [NetworkEvent]s emitted by [NetworkClient]. Wire this to your analytics pipeline. */
