@@ -1,6 +1,6 @@
 # kenwork
 
-A Kotlin-first networking library for Android — typed endpoints, a coroutine HTTP client with
+A Kotlin-first networking library for Android and Kotlin Multiplatform — typed endpoints, a coroutine HTTP client with
 automatic OAuth refresh, layered caching, and a repository abstraction. **kenwork is the Kotlin
 counterpart of [SwiftyNetwork](https://github.com/maniramezan/SwiftyNetwork)**: the two libraries
 expose the same concepts with idiomatic APIs on each platform.
@@ -12,6 +12,7 @@ free (plain constructors + a `Configuration` object).
 
 | Artifact | What it provides |
 |---|---|
+| `io.github.maniramezan.kenwork:network-core` | KMP `KenworkHttpClient` policy for Android, JVM/Desktop, and iOS with a consumer-supplied Ktor engine |
 | `io.github.maniramezan.kenwork:network` | `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `RetryPolicy`/`DefaultRetryPolicy`, `NetworkError`, `NetworkMonitor`/`ReachabilityGate`, `SslPinningConfiguration`, `KenworkLogger`, `NetworkEventListener` |
 | `io.github.maniramezan.kenwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `FileSystemCache`, `LayeredCache`, `CachePolicy`, `CacheKey`, `CacheChange` |
 | `io.github.maniramezan.kenwork:repository` | `Repository`/`GenericRepository` (with `fetch` + reactive `stream`), `LocalDataSource`/`CacheBasedLocalDataSource` |
@@ -21,6 +22,7 @@ free (plain constructors + a `Configuration` object).
 
 ```kotlin
 dependencies {
+    implementation("io.github.maniramezan.kenwork:network-core:0.5.0") // KMP
     implementation("io.github.maniramezan.kenwork:network:0.3.0")
     implementation("io.github.maniramezan.kenwork:cache:0.3.0")        // optional
     implementation("io.github.maniramezan.kenwork:repository:0.3.0")   // optional
@@ -29,7 +31,9 @@ dependencies {
 }
 ```
 
-Minimum SDK 26, JDK 17 bytecode.
+`network-core` targets Android (minimum SDK 26), JVM/Desktop (JDK 17 bytecode), and iOS device and
+Apple Silicon simulator. The established `network`, cache, repository, mutations, and testing
+artifacts remain Android/JVM libraries.
 
 ## 60-second quickstart
 
