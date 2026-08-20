@@ -14,17 +14,19 @@ public object KenworkHttpClient {
         engineFactory: HttpClientEngineFactory<T>,
         json: Json = Json { ignoreUnknownKeys = true },
         followRedirects: Boolean = false,
-    ): HttpClient = HttpClient(engineFactory) {
-        this.followRedirects = followRedirects
-        install(ContentNegotiation) { json(json) }
-    }
+    ): HttpClient =
+        HttpClient(engineFactory) {
+            this.followRedirects = followRedirects
+            install(ContentNegotiation) { json(json) }
+        }
 
     public fun create(
         engine: HttpClientEngine,
         json: Json = Json { ignoreUnknownKeys = true },
         followRedirects: Boolean = false,
-    ): HttpClient = HttpClient(engine) {
-        this.followRedirects = followRedirects
-        install(ContentNegotiation) { json(json) }
-    }
+    ): HttpClient =
+        HttpClient(engine) {
+            this.followRedirects = followRedirects
+            install(ContentNegotiation) { json(json) }
+        }
 }
