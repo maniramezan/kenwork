@@ -60,7 +60,13 @@ subprojects {
 
     // Every published Android library gets API docs (Dokka) and Maven Central
     // publishing (vanniktech, configured from the root gradle.properties POM_* keys).
+    // Two plugin IDs cover this: the legacy Android library plugin, and the newer
+    // Android multiplatform library plugin used by KMP modules like network-core.
     pluginManager.withPlugin("com.android.library") {
+        pluginManager.apply("org.jetbrains.dokka")
+        pluginManager.apply("com.vanniktech.maven.publish")
+    }
+    pluginManager.withPlugin("com.android.kotlin.multiplatform.library") {
         pluginManager.apply("org.jetbrains.dokka")
         pluginManager.apply("com.vanniktech.maven.publish")
     }
