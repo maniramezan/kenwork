@@ -15,6 +15,23 @@ permissions:
   contents: read
 
 jobs:
+  ios-core:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Test shared HTTP policy on the iOS simulator
+        run: ./gradlew :network-core:iosSimulatorArm64Test
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ios-core-reports
+          path: network-core/build/reports/tests/**
+
   build:
     runs-on: ubuntu-latest
     steps:
