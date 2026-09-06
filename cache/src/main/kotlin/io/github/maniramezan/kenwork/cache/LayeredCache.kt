@@ -4,6 +4,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * A two-tier cache composing a fast [memory] layer over an optional [persistent] layer.
@@ -15,6 +17,10 @@ import kotlinx.coroutines.flow.asSharedFlow
  * [changes] reflects writes and removals against this layered view; read-time promotions are not
  * reported, since the logical value did not change.
  *
+ * Operations through this instance are serialized across both tiers, so a slow disk read cannot
+ * promote stale data over a newer write or resurrect a removed entry. Access the backing caches
+ * through this instance to retain that guarantee; independently mutating them bypasses its lock.
+ *
  * @param memory the fast, volatile layer.
  * @param persistent the durable layer, or `null` for a memory-only cache.
  */
@@ -22,6 +28,7 @@ public class LayeredCache<V : Any>(
     private val memory: Cache<V>,
     private val persistent: Cache<V>? = null,
 ) : Cache<V> {
+    private val mutex = Mutex()
     private val changeFlow =
         MutableSharedFlow<CacheChange>(
             extraBufferCapacity = CHANGE_BUFFER_CAPACITY,
@@ -32,44 +39,48 @@ public class LayeredCache<V : Any>(
 
     override suspend fun value(key: CacheKey): V? = entry(key)?.value
 
-    override suspend fun entry(key: CacheKey): CacheEntry<V>? {
-        memory.entry(key)?.let { return it }
-        val promoted = persistent?.entry(key)
-        if (promoted != null) {
-            val mem = memory
-            if (mem is TimestampedCache) {
-                mem.setValue(promoted.value, key, promoted.timestamp)
-            } else {
-                memory.setValue(promoted.value, key)
+    override suspend fun entry(key: CacheKey): CacheEntry<V>? =
+        mutex.withLock {
+            memory.entry(key)?.let { return@withLock it }
+            val promoted = persistent?.entry(key)
+            if (promoted != null) {
+                val mem = memory
+                if (mem is TimestampedCache) {
+                    mem.setValue(promoted.value, key, promoted.timestamp)
+                } else {
+                    memory.setValue(promoted.value, key)
+                }
             }
+            promoted
         }
-        return promoted
-    }
 
     override suspend fun setValue(
         value: V,
         key: CacheKey,
-    ) {
-        // Durable layer first: if it throws (disk full, IO error), memory is left untouched rather
-        // than diverging ahead of a write that never actually persisted.
-        persistent?.setValue(value, key)
-        memory.setValue(value, key)
-        changeFlow.tryEmit(CacheChange.Updated(key))
-    }
+    ): Unit =
+        mutex.withLock {
+            // Durable layer first: if it throws (disk full, IO error), memory is left untouched rather
+            // than diverging ahead of a write that never actually persisted.
+            persistent?.setValue(value, key)
+            memory.setValue(value, key)
+            changeFlow.tryEmit(CacheChange.Updated(key))
+        }
 
-    override suspend fun removeValue(key: CacheKey) {
-        persistent?.removeValue(key)
-        memory.removeValue(key)
-        changeFlow.tryEmit(CacheChange.Removed(key))
-    }
+    override suspend fun removeValue(key: CacheKey): Unit =
+        mutex.withLock {
+            persistent?.removeValue(key)
+            memory.removeValue(key)
+            changeFlow.tryEmit(CacheChange.Removed(key))
+        }
 
-    override suspend fun removeAll() {
-        persistent?.removeAll()
-        memory.removeAll()
-        changeFlow.tryEmit(CacheChange.Cleared)
-    }
+    override suspend fun removeAll(): Unit =
+        mutex.withLock {
+            persistent?.removeAll()
+            memory.removeAll()
+            changeFlow.tryEmit(CacheChange.Cleared)
+        }
 
-    override suspend fun timestamp(key: CacheKey): Long? = memory.timestamp(key) ?: persistent?.timestamp(key)
+    override suspend fun timestamp(key: CacheKey): Long? = mutex.withLock { memory.timestamp(key) ?: persistent?.timestamp(key) }
 
     private companion object {
         private const val CHANGE_BUFFER_CAPACITY = 64
