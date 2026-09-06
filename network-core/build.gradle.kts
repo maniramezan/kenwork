@@ -10,7 +10,7 @@ kotlin {
     explicitApi()
     android {
         namespace = "io.github.maniramezan.kenwork.core"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 26
         compilerOptions.jvmTarget = JvmTarget.JVM_17
         withHostTest {}
