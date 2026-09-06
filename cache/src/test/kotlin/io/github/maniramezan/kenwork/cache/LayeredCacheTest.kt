@@ -1,12 +1,81 @@
 package io.github.maniramezan.kenwork.cache
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class LayeredCacheTest {
+    @Test
+    fun `a suspended disk promotion cannot overwrite a newer write`() =
+        runTest {
+            val key = CacheKey("k")
+            val memory = InMemoryCache<String>()
+            val disk = InMemoryCache<String>()
+            disk.setValue("old", key)
+            val entered = CompletableDeferred<Unit>()
+            val resume = CompletableDeferred<Unit>()
+            val slowDisk =
+                object : Cache<String> by disk {
+                    override suspend fun entry(key: CacheKey): CacheEntry<String>? {
+                        val snapshot = disk.entry(key)
+                        entered.complete(Unit)
+                        resume.await()
+                        return snapshot
+                    }
+                }
+            val layered = LayeredCache(memory, slowDisk)
+            val read = async { layered.entry(key) }
+            entered.await()
+            val write = async(start = CoroutineStart.UNDISPATCHED) { layered.setValue("new", key) }
+            assertFalse(write.isCompleted)
+            resume.complete(Unit)
+            read.await()
+            write.await()
+            assertEquals("new", memory.value(key))
+            assertEquals("new", disk.value(key))
+        }
+
+    @Test
+    fun `a suspended disk promotion cannot resurrect removed entries`() =
+        runTest {
+            for (clearAll in listOf(false, true)) {
+                val key = CacheKey("k")
+                val memory = InMemoryCache<String>()
+                val disk = InMemoryCache<String>()
+                disk.setValue("old", key)
+                val entered = CompletableDeferred<Unit>()
+                val resume = CompletableDeferred<Unit>()
+                val slowDisk =
+                    object : Cache<String> by disk {
+                        override suspend fun entry(key: CacheKey): CacheEntry<String>? {
+                            val snapshot = disk.entry(key)
+                            entered.complete(Unit)
+                            resume.await()
+                            return snapshot
+                        }
+                    }
+                val layered = LayeredCache(memory, slowDisk)
+                val read = async { layered.entry(key) }
+                entered.await()
+                val remove =
+                    async(start = CoroutineStart.UNDISPATCHED) {
+                        if (clearAll) layered.removeAll() else layered.removeValue(key)
+                    }
+                assertFalse(remove.isCompleted)
+                resume.complete(Unit)
+                read.await()
+                remove.await()
+                assertNull(memory.value(key))
+                assertNull(disk.value(key))
+            }
+        }
+
     @Test
     fun `reads from memory first`() =
         runTest {
