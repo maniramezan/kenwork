@@ -1,14 +1,45 @@
 package io.github.maniramezan.kenwork.network
 
+import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NetworkClientRequestTest {
+    @Test
+    fun `failed reconfiguration preserves the previous authorization and client`(): Unit =
+        runBlocking {
+            val originalEngine =
+                MockEngine {
+                    assertNull(it.headers[HttpHeaders.Authorization])
+                    json("""{"id":1,"name":"ada"}""")
+                }
+            val replacementEngine = MockEngine { error("Replacement must not be used") }
+            val client = NetworkClient(NetworkClientConfiguration(engine = originalEngine))
+            try {
+                assertFailsWith<IllegalArgumentException> {
+                    client.updateConfiguration(
+                        NetworkClientConfiguration(
+                            engine = replacementEngine,
+                            timeoutMillis = -1,
+                            authorizationProvider = TestAuthProvider("replacement-token"),
+                        ),
+                    )
+                }
+                assertEquals(Sample(1, "ada"), client.request<Sample>(TestEndpoint("samples/1")))
+            } finally {
+                client.close()
+                originalEngine.close()
+                replacementEngine.close()
+            }
+        }
+
     @Test
     fun `decodes a JSON response`(): Unit =
         runBlocking {

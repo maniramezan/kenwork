@@ -1,13 +1,16 @@
 package io.github.maniramezan.kenwork.network
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Supplies (and refreshes) the authorization applied to requests that don't carry their own.
@@ -53,13 +56,20 @@ public class OAuthAuthorizationProvider(
     override suspend fun refreshAuthorizationIfNeeded(): Boolean {
         val deferred =
             mutex.withLock {
-                inFlight ?: scope.async { performRefresh() }.also { inFlight = it }
+                inFlight ?: scope
+                    .async(start = CoroutineStart.LAZY) {
+                        try {
+                            performRefresh()
+                        } finally {
+                            withContext(NonCancellable) { mutex.withLock { inFlight = null } }
+                        }
+                    }.also {
+                        // Publish before execution, including on an immediately completing dispatcher.
+                        inFlight = it
+                        it.start()
+                    }
             }
-        return try {
-            deferred.await()
-        } finally {
-            mutex.withLock { if (inFlight === deferred) inFlight = null }
-        }
+        return deferred.await()
     }
 
     private suspend fun performRefresh(): Boolean {
