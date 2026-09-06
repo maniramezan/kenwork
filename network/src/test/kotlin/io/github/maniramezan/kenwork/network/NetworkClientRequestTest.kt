@@ -98,6 +98,22 @@ class NetworkClientRequestTest {
         }
 
     @Test
+    fun `malformed JSON emits only the failed decoding outcome`(): Unit =
+        runBlocking {
+            val listener = RecordingListener()
+            val client = testClient(eventListener = listener) { json("not-json") }
+            try {
+                assertFailsWith<NetworkError.DecodingFailed> { client.request<Sample>(TestEndpoint("x")) }
+                assertEquals(1, listener.events.size)
+                assertEquals("DecodingFailed", listener.events.single().errorType)
+                assertTrue(listener.events.single().isFinalAttempt)
+                assertEquals(false, listener.events.single().isSuccess)
+            } finally {
+                client.close()
+            }
+        }
+
+    @Test
     fun `close prevents further requests`(): Unit =
         runBlocking {
             val client = testClient { json("""{"id":1,"name":"ada"}""") }
