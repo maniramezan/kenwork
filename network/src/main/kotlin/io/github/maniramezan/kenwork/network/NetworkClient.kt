@@ -140,6 +140,7 @@ public class NetworkClient(
                             val response = executeWithAuth(client, config, endpoint, body, bodyType, attempt)
                             validateOrThrow(response)
                         }
+                    val decoded = decodeBody(validated, responseType)
                     config.eventListener?.onEvent(
                         NetworkEvent(
                             endpointId = endpoint.endpointId(),
@@ -149,7 +150,7 @@ public class NetworkClient(
                             attempt = attempt,
                         ),
                     )
-                    return decodeBody(validated, responseType)
+                    return decoded
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: NetworkError) {
