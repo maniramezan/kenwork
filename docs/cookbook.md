@@ -3,6 +3,10 @@
 Task-oriented recipes. All snippets assume `import io.github.maniramezan.kenwork.network.*`
 (and `.cache.*` / `.repository.*` where relevant).
 
+For shared KMP clients, see [platforms.md](platforms.md). For GraphQL envelopes and partial-data
+handling, see [graphql.md](graphql.md). Review [security.md](security.md) before enabling logging,
+persisting account data, or retrying mutations.
+
 ## Define endpoints
 
 ```kotlin
@@ -68,7 +72,7 @@ try {
 } catch (e: NetworkError.NotFound) {
     // 404
 } catch (e: NetworkError.ServerError) {
-    log(e.statusCode, e.body)
+    log(e.statusCode) // Raw response bodies can contain credentials or personal data.
 } catch (e: NetworkError) {
     // Unauthorized, Timeout, NoInternetConnection, DecodingFailed, ...
 }
