@@ -274,7 +274,11 @@ public class NetworkClient(
         val raw = response.headers[HttpHeaders.RetryAfter]?.trim() ?: return null
         val seconds = raw.toLongOrNull()
         return if (seconds != null) {
-            (seconds * MILLIS_PER_SECOND).coerceAtLeast(0)
+            when {
+                seconds <= 0 -> 0
+                seconds > Long.MAX_VALUE / MILLIS_PER_SECOND -> Long.MAX_VALUE
+                else -> seconds * MILLIS_PER_SECOND
+            }
         } else {
             runCatching {
                 val target = ZonedDateTime.parse(raw, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
