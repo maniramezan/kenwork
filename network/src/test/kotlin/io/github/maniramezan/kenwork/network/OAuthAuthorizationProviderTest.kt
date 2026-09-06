@@ -1,8 +1,10 @@
 package io.github.maniramezan.kenwork.network
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import java.util.concurrent.atomic.AtomicInteger
@@ -11,6 +13,33 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class OAuthAuthorizationProviderTest {
+    @Test
+    fun `cancelling a waiter does not start a competing token refresh`() =
+        runTest {
+            val entered = CompletableDeferred<Unit>()
+            val gate = CompletableDeferred<Unit>()
+            val calls = AtomicInteger()
+            val provider =
+                OAuthAuthorizationProvider("old") {
+                    calls.incrementAndGet()
+                    entered.complete(Unit)
+                    gate.await()
+                    "new"
+                }
+            try {
+                val first = async { provider.refreshAuthorizationIfNeeded() }
+                entered.await()
+                first.cancelAndJoin()
+                val second = async(start = CoroutineStart.UNDISPATCHED) { provider.refreshAuthorizationIfNeeded() }
+                gate.complete(Unit)
+                assertTrue(second.await())
+                assertEquals(1, calls.get())
+                assertEquals("new", provider.currentAccessToken())
+            } finally {
+                provider.close()
+            }
+        }
+
     @Test
     fun `currentAuthorization returns the bearer token`() =
         runTest {
