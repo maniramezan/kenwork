@@ -7,6 +7,38 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class AuthorizationTypeTest {
+    @Test
+    fun `string representations redact every credential type`() {
+        val credentials =
+            listOf(
+                AuthorizationType.Basic("private-user", "private-password") to "Basic(<redacted>)",
+                AuthorizationType.BasicEncoded("private-encoded") to "BasicEncoded(<redacted>)",
+                AuthorizationType.Bearer("private-token") to "Bearer(<redacted>)",
+                AuthorizationType.ApiKey("private-key") to "ApiKey(<redacted>)",
+                AuthorizationType.Custom("X-Private", "private-value") to "Custom(<redacted>)",
+            )
+        credentials.forEach { (authorization, expected) -> assertEquals(expected, authorization.toString()) }
+    }
+
+    @Test
+    fun `resolved authorization replaces conflicting headers`() {
+        val credentials =
+            listOf(
+                AuthorizationType.Basic("u", "p") to HttpHeaders.Authorization,
+                AuthorizationType.BasicEncoded("encoded") to HttpHeaders.Authorization,
+                AuthorizationType.Bearer("token") to HttpHeaders.Authorization,
+                AuthorizationType.ApiKey("key") to "X-API-Key",
+                AuthorizationType.Custom("X-Auth", "value") to "X-Auth",
+            )
+        credentials.forEach { (authorization, header) ->
+            val builder = HttpRequestBuilder()
+            builder.headers.append(header.lowercase(), "stale")
+            builder.headers.append(header, "also-stale")
+            authorization.applyTo(builder)
+            assertEquals(listOf(requireNotNull(applied(authorization, header))), builder.headers.getAll(header))
+        }
+    }
+
     private fun applied(
         type: AuthorizationType,
         header: String = HttpHeaders.Authorization,
