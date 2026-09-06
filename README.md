@@ -16,24 +16,31 @@ free (plain constructors + a `Configuration` object).
 | `io.github.maniramezan.kenwork:network` | `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `RetryPolicy`/`DefaultRetryPolicy`, `NetworkError`, `NetworkMonitor`/`ReachabilityGate`, `SslPinningConfiguration`, `KenworkLogger`, `NetworkEventListener` |
 | `io.github.maniramezan.kenwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `FileSystemCache`, `LayeredCache`, `CachePolicy`, `CacheKey`, `CacheChange` |
 | `io.github.maniramezan.kenwork:repository` | `Repository`/`GenericRepository` (with `fetch` + reactive `stream`), `LocalDataSource`/`CacheBasedLocalDataSource` |
+| `io.github.maniramezan.kenwork:mutations` | `MutationQueue`, coalescing, retry, observable status, and a pluggable `MutationStore` (in-memory by default) |
 | `io.github.maniramezan.kenwork:testing` | `MockEngine` client builder, fakes (`FakeAuthorizationProvider`, `FakeReachabilityGate`), `RecordingRetryPolicy`, recording listener for consumer tests |
 
 ## Install
 
 ```kotlin
 dependencies {
-    implementation("io.github.maniramezan.kenwork:network-core:0.5.0") // KMP
-    implementation("io.github.maniramezan.kenwork:network:0.3.0")
-    implementation("io.github.maniramezan.kenwork:cache:0.3.0")        // optional
-    implementation("io.github.maniramezan.kenwork:repository:0.3.0")   // optional
-    implementation("io.github.maniramezan.kenwork:mutations:0.3.0")    // optional
-    testImplementation("io.github.maniramezan.kenwork:testing:0.3.0")  // optional
+    val kenworkVersion = "0.5.1"
+    implementation("io.github.maniramezan.kenwork:network-core:$kenworkVersion") // KMP
+    implementation("io.github.maniramezan.kenwork:network:$kenworkVersion")
+    implementation("io.github.maniramezan.kenwork:cache:$kenworkVersion")        // optional
+    implementation("io.github.maniramezan.kenwork:repository:$kenworkVersion")   // optional
+    implementation("io.github.maniramezan.kenwork:mutations:$kenworkVersion")    // optional
+    testImplementation("io.github.maniramezan.kenwork:testing:$kenworkVersion")  // optional
 }
 ```
 
 `network-core` targets Android (minimum SDK 26), JVM/Desktop (JDK 17 bytecode), and iOS device and
 Apple Silicon simulator. The established `network`, cache, repository, mutations, and testing
-artifacts remain Android/JVM libraries.
+artifacts remain Android libraries published as AARs; JVM/Desktop consumers use `network-core`.
+
+Choose `network-core` for shared KMP code, or `network` for the Android endpoint/auth/retry stack;
+neither depends on the other. In a KMP build, put `network-core` in `commonMain.dependencies` and
+your Ktor engine dependency in the appropriate platform source set. See the
+[module boundaries and engine ownership guide](docs/platforms.md).
 
 ## 60-second quickstart
 
@@ -96,6 +103,9 @@ A `401` automatically triggers a single coalesced token refresh and one retry.
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — layering & concurrency model.
 - [docs/cookbook.md](docs/cookbook.md) — task-oriented recipes.
+- [docs/platforms.md](docs/platforms.md) — platform support, shared code, and client ownership.
+- [docs/security.md](docs/security.md) — credentials, logging, persistence, and retry boundaries.
+- [docs/graphql.md](docs/graphql.md) — GraphQL transport and application-error handling.
 - [docs/parity.md](docs/parity.md) — SwiftyNetwork ↔ kenwork mapping.
 - [MIGRATION.md](MIGRATION.md) — moving an existing Ktor/auth layer onto kenwork.
 - [docs/release.md](docs/release.md) — how releases reach Maven Central.
