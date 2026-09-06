@@ -21,9 +21,11 @@ import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.util.reflect.TypeInfo
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -72,9 +74,10 @@ public class NetworkClient(
         val toClose =
             mutex.withLock {
                 check(!closed) { "NetworkClient is closed" }
+                val replacement = ClientHolder(buildClient(newConfiguration))
                 val previous = holder
                 configuration = newConfiguration
-                holder = ClientHolder(buildClient(newConfiguration))
+                holder = replacement
                 previous.takeIf { it.refCount == 0 }
             }
         toClose?.client?.close()
@@ -114,7 +117,7 @@ public class NetworkClient(
             @Suppress("UNCHECKED_CAST")
             return attemptWithRetry(activeHolder.client, config, endpoint, body, bodyType, responseType, startNs) as T
         } finally {
-            release(activeHolder)
+            withContext(NonCancellable) { release(activeHolder) }
         }
     }
 
