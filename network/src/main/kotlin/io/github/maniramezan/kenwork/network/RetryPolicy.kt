@@ -53,13 +53,19 @@ public class DefaultRetryPolicy(
     public val isRetryableStatus: (Int) -> Boolean = { it == STATUS_TOO_MANY_REQUESTS || it >= STATUS_SERVER_ERROR },
     private val random: Random = Random.Default,
 ) : RetryPolicy {
+    init {
+        require(maxRetries >= 0) { "maxRetries must be non-negative" }
+        require(backoffBaseMillis >= 0) { "backoffBaseMillis must be non-negative" }
+        require(backoffMaxMillis >= 0) { "backoffMaxMillis must be non-negative" }
+    }
+
     override fun retryDelayMillis(
         attempt: Int,
         method: HttpMethod,
         error: NetworkError,
     ): Long? {
         val allowed =
-            attempt <= maxRetries &&
+            attempt in 1..maxRetries &&
                 (method.isIdempotent || retryNonIdempotent) &&
                 isRetryable(error)
         return if (allowed) delayFor(attempt, error) else null
@@ -79,8 +85,14 @@ public class DefaultRetryPolicy(
         val retryAfter = (error as? NetworkError.ServerError)?.retryAfterMillis
         if (retryAfter != null) return retryAfter.coerceIn(0, backoffMaxMillis)
         val shift = (attempt - 1).coerceIn(0, MAX_BACKOFF_SHIFT)
-        val ceiling = (backoffBaseMillis shl shift).coerceAtMost(backoffMaxMillis)
-        return random.nextLong(ceiling + 1)
+        val ceiling =
+            if (backoffBaseMillis > (backoffMaxMillis shr shift)) {
+                backoffMaxMillis
+            } else {
+                backoffBaseMillis shl shift
+            }
+        // An inclusive upper bound must also work when adding one would overflow.
+        return if (ceiling == Long.MAX_VALUE) random.nextLong().ushr(1) else random.nextLong(ceiling + 1)
     }
 
     public companion object {
