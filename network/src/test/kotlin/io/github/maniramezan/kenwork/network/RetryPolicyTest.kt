@@ -8,9 +8,45 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class RetryPolicyTest {
+    @Test
+    fun `rejects negative retry settings`() {
+        assertFailsWith<IllegalArgumentException> { DefaultRetryPolicy(maxRetries = -1) }
+        assertFailsWith<IllegalArgumentException> { DefaultRetryPolicy(backoffBaseMillis = -1) }
+        assertFailsWith<IllegalArgumentException> { DefaultRetryPolicy(backoffMaxMillis = -1) }
+    }
+
+    @Test
+    fun `large backoffs remain non-negative and capped`() {
+        val capped = DefaultRetryPolicy(backoffBaseMillis = Long.MAX_VALUE, backoffMaxMillis = 100)
+        val unbounded = DefaultRetryPolicy(backoffBaseMillis = Long.MAX_VALUE, backoffMaxMillis = Long.MAX_VALUE)
+        repeat(100) {
+            assertTrue(capped.retryDelayMillis(2, HttpMethod.GET, NetworkError.Timeout)!! in 0L..100L)
+            assertTrue(unbounded.retryDelayMillis(2, HttpMethod.GET, NetworkError.Timeout)!! >= 0L)
+        }
+        assertNull(capped.retryDelayMillis(0, HttpMethod.GET, NetworkError.Timeout))
+        assertEquals(0L, DefaultRetryPolicy(backoffMaxMillis = 0).retryDelayMillis(1, HttpMethod.GET, NetworkError.Timeout))
+    }
+
+    @Test
+    fun `oversized Retry-After seconds saturate instead of becoming an immediate retry`(): Unit =
+        runBlocking {
+            val client =
+                testClient {
+                    respond("{}", HttpStatusCode.TooManyRequests, headersOf(HttpHeaders.RetryAfter, Long.MAX_VALUE.toString()))
+                }
+            try {
+                val error = assertFailsWith<NetworkError.ServerError> { client.request<Sample>(TestEndpoint("x")) }
+                assertEquals(Long.MAX_VALUE, error.retryAfterMillis)
+                assertEquals(10_000L, DefaultRetryPolicy().retryDelayMillis(1, HttpMethod.GET, error))
+            } finally {
+                client.close()
+            }
+        }
+
     @Test
     fun `retries a 429 by default`(): Unit =
         runBlocking {
