@@ -1,6 +1,7 @@
 package io.github.maniramezan.kenwork.core
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.HttpClientEngineConfig
 import io.ktor.client.engine.HttpClientEngineFactory
@@ -16,8 +17,7 @@ public object KenworkHttpClient {
         followRedirects: Boolean = false,
     ): HttpClient =
         HttpClient(engineFactory) {
-            this.followRedirects = followRedirects
-            install(ContentNegotiation) { json(json) }
+            configurePolicy(json, followRedirects)
         }
 
     public fun create(
@@ -26,7 +26,14 @@ public object KenworkHttpClient {
         followRedirects: Boolean = false,
     ): HttpClient =
         HttpClient(engine) {
-            this.followRedirects = followRedirects
-            install(ContentNegotiation) { json(json) }
+            configurePolicy(json, followRedirects)
         }
+
+    private fun HttpClientConfig<*>.configurePolicy(
+        json: Json,
+        followRedirects: Boolean,
+    ) {
+        this.followRedirects = followRedirects
+        install(ContentNegotiation) { json(json) }
+    }
 }
