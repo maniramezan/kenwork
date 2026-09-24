@@ -10,12 +10,19 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FileSystemCacheTest {
     private val dir: File = createTempDirectory("fscache").toFile()
     private val key = CacheKey("user:1:profile")
+
+    private companion object {
+        /** `sha256("user:1:profile")`, i.e. the on-disk name of [key]'s entry. */
+        const val KEY_SHA256 = "ffb422ad0dd2dd8fddf487a7c23642dfdd793e642fc1b6c79cea94d8cfd8a188"
+    }
 
     @AfterTest
     fun cleanup() {
@@ -132,5 +139,28 @@ class FileSystemCacheTest {
             // Memory miss falls through to disk and promotes with the original timestamp.
             assertEquals(CacheEntry("disk", 99L), layered.entry(key))
             assertEquals(99L, memory.timestamp(key))
+        }
+
+    @Test
+    fun `entry file names are the lowercase hex SHA-256 of the key`() =
+        runTest {
+            // Pinned so a hashing change can never orphan caches already on users' devices.
+            cache().setValue("ada", key)
+            assertEquals(listOf("$KEY_SHA256.kenc"), dir.list()?.toList())
+        }
+
+    @Test
+    fun `removeAll also deletes orphaned temporary files but leaves foreign files`() =
+        runTest {
+            val cache = cache()
+            cache.setValue("ada", key)
+            val orphan = File(dir, "$KEY_SHA256.kenc123.tmp").apply { writeText("partial") }
+            val foreign = File(dir, "notes.tmp").apply { writeText("keep") }
+
+            cache.removeAll()
+
+            assertFalse(orphan.exists())
+            assertTrue(foreign.exists())
+            assertEquals(listOf("notes.tmp"), dir.list()?.toList())
         }
 }

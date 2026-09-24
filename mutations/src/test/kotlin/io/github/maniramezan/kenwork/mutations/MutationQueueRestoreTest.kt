@@ -1,6 +1,7 @@
 package io.github.maniramezan.kenwork.mutations
 
 import io.github.maniramezan.kenwork.network.DefaultRetryPolicy
+import io.github.maniramezan.kenwork.network.NetworkEndpoint
 import io.github.maniramezan.kenwork.network.NetworkError
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -181,5 +182,70 @@ class MutationQueueRestoreTest {
             assertEquals(1, apiClient.calls.size)
             assertEquals(LikeBody(false), apiClient.calls.single().body)
             assertTrue(store.loadAll().isEmpty())
+        }
+
+    @Test
+    fun `a record that fails to decode is kept and does not block other keys`() =
+        runTest {
+            val brokenCodec =
+                object : MutationCodec<LikeBody> {
+                    override val id = "broken"
+
+                    override fun encode(
+                        endpoint: NetworkEndpoint,
+                        body: LikeBody?,
+                    ): String = ""
+
+                    override fun decode(payload: String): DecodedMutation<LikeBody> = throw IllegalArgumentException("corrupt payload")
+                }
+            val store = InMemoryMutationStore()
+            val broken = MutationRecord("broken-1", "broken:key", brokenCodec.id, "garbage", enqueuedAtMillis = 0L)
+            store.save(broken)
+            store.save(
+                MutationRecord(
+                    id = "record-1",
+                    key = key.value,
+                    codecId = SetLikeStateCodec.id,
+                    payload = SetLikeStateCodec.encode(SetLikeState(42), LikeBody(true)),
+                    enqueuedAtMillis = 0L,
+                ),
+            )
+            val apiClient = RecordingApiClient()
+            val queue =
+                MutationQueue(
+                    apiClient = apiClient,
+                    scope = backgroundScope,
+                    store = store,
+                    codecs = listOf(brokenCodec, SetLikeStateCodec),
+                )
+
+            queue.restore()
+            settle()
+
+            assertEquals(1, apiClient.calls.size, "the decodable record must still be replayed")
+            assertEquals(listOf(broken), store.loadAll(), "the undecodable record must be left for a future version")
+        }
+
+    @Test
+    fun `restoring a mutation that is already running neither resends nor drops its record`() =
+        runTest {
+            val apiClient = RecordingApiClient { _, _ -> throw NetworkError.NoInternetConnection }
+            val store = InMemoryMutationStore()
+            val queue =
+                MutationQueue(
+                    apiClient = apiClient,
+                    scope = backgroundScope,
+                    store = store,
+                    defaultRetryPolicy = DefaultRetryPolicy(maxRetries = 5, backoffBaseMillis = 60_000, retryNonIdempotent = true),
+                )
+            queue.enqueue(key, SetLikeState(42), LikeBody(true), codec = SetLikeStateCodec)
+            runCurrent() // first attempt fails; the mutation parks in its retry backoff.
+            val persisted = store.loadAll().single()
+
+            queue.restore()
+            runCurrent()
+
+            assertEquals(1, apiClient.calls.size)
+            assertEquals(listOf(persisted), store.loadAll())
         }
 }

@@ -81,7 +81,7 @@ public class FileSystemCache<V : Any>(
     override suspend fun removeAll() {
         withContext(ioContext) {
             mutex.withLock {
-                directory.listFiles { file -> file.name.endsWith(SUFFIX) }?.forEach { it.delete() }
+                directory.listFiles { file -> file.isOwnedEntryOrOrphanedTemp() }?.forEach { it.delete() }
             }
         }
         changeFlow.tryEmit(CacheChange.Cleared)
@@ -121,15 +121,31 @@ public class FileSystemCache<V : Any>(
 
     private fun fileFor(key: CacheKey): File = File(directory, hash(key.rawValue) + SUFFIX)
 
-    private fun hash(raw: String): String =
-        MessageDigest
-            .getInstance("SHA-256")
-            .digest(raw.toByteArray())
-            .joinToString("") { "%02x".format(it) }
+    /**
+     * Whether this file is an entry this cache wrote, or a temporary left behind when the process
+     * died between creating it and the atomic move (temporaries are named `<entry>.kenc<n>.tmp`).
+     */
+    private fun File.isOwnedEntryOrOrphanedTemp(): Boolean =
+        name.endsWith(SUFFIX) || (name.endsWith(TEMPORARY_SUFFIX) && name.contains(SUFFIX))
+
+    private fun hash(raw: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray())
+        val hex = CharArray(digest.size * 2)
+        digest.forEachIndexed { index, byte ->
+            val value = byte.toInt() and BYTE_MASK
+            hex[index * 2] = HEX_DIGITS[value ushr NIBBLE_BITS]
+            hex[index * 2 + 1] = HEX_DIGITS[value and NIBBLE_MASK]
+        }
+        return String(hex)
+    }
 
     private companion object {
         private const val SUFFIX = ".kenc"
         private const val TEMPORARY_SUFFIX = ".tmp"
         private const val CHANGE_BUFFER_CAPACITY = 64
+        private const val HEX_DIGITS = "0123456789abcdef"
+        private const val BYTE_MASK = 0xFF
+        private const val NIBBLE_MASK = 0x0F
+        private const val NIBBLE_BITS = 4
     }
 }

@@ -64,3 +64,17 @@ public sealed class NetworkError(
         cause: Throwable,
     ) : NetworkError(cause.message ?: "Underlying network error", cause)
 }
+
+/**
+ * The HTTP status code this error represents, or `null` when the request never produced one
+ * (timeouts, connectivity loss, decoding failures, …).
+ */
+public val NetworkError.httpStatusCode: Int?
+    get() =
+        when (this) {
+            NetworkError.Unauthorized -> HttpStatus.UNAUTHORIZED
+            NetworkError.Forbidden -> HttpStatus.FORBIDDEN
+            NetworkError.NotFound -> HttpStatus.NOT_FOUND
+            is NetworkError.ServerError -> statusCode
+            else -> null
+        }

@@ -3,6 +3,9 @@
 Task-oriented recipes. All snippets assume `import io.github.maniramezan.kenwork.network.*`
 (and `.cache.*` / `.repository.*` where relevant).
 
+For an end-to-end example that combines these recipes, read the test-verified
+[`samples` module](../samples/src/main/kotlin/io/github/maniramezan/kenwork/samples).
+
 For shared KMP clients, see [platforms.md](platforms.md). For GraphQL envelopes and partial-data
 handling, see [graphql.md](graphql.md). Review [security.md](security.md) before enabling logging,
 persisting account data, or retrying mutations.
@@ -33,6 +36,27 @@ val client = NetworkClient()
 val page: List<Video> = client.request(ListVideos(limit = 20, offset = 0))
 val created: Video = client.request(CreateVideo(auth = token), body = NewVideo(title = "Hi"))
 client.execute(DeleteVideo(id = 42))   // ignores the response body
+```
+
+Endpoints that return no meaningful body (e.g. `204 No Content`) can be requested as `Unit`
+(what `execute` does) or as `EmptyResponse`; neither runs the JSON decoder:
+
+```kotlin
+val done: EmptyResponse = client.request(DeleteVideo(id = 42))
+```
+
+## Client lifecycle
+
+Create one `NetworkClient` per credential scope and reuse it. Swapping configuration (e.g. a new
+base policy after sign-in) is safe mid-flight; the old engine closes once its requests drain:
+
+```kotlin
+client.updateConfiguration(NetworkClientConfiguration(authorizationProvider = signedInProvider))
+
+// When the owning lifecycle ends (e.g. sign-out):
+client.close()               // suspending; lets in-flight requests finish
+signedInProvider.close()     // cancels any pending token refresh
+repository.close()           // cancels loads only when the repository owns its scope
 ```
 
 ## Authorization & automatic refresh
@@ -75,6 +99,7 @@ try {
     log(e.statusCode) // Raw response bodies can contain credentials or personal data.
 } catch (e: NetworkError) {
     // Unauthorized, Timeout, NoInternetConnection, DecodingFailed, ...
+    val status: Int? = e.httpStatusCode   // 401/403/404/5xx…, or null for transport failures
 }
 ```
 
@@ -153,6 +178,10 @@ Concurrent `fetch`es that miss the cache for the same key are **coalesced** into
 repo.stream(GetVideo(42), key, CachePolicy.ReturnCacheElseLoad)
     .collect { video -> render(video) }
 
+// streamOrNull also emits null when the value is removed, expires, or the store is cleared
+// (e.g. on sign-out), so the UI can clear stale content.
+repo.streamOrNull(GetVideo(42), key).collect { video -> if (video == null) showEmpty() else render(video) }
+
 // Lower level: observe a cache directly.
 cache.changes().collect { change -> /* CacheChange.Updated / Removed / Cleared */ }
 ```
@@ -179,7 +208,14 @@ queue.statusFlow(MutationKey.of("like", "video", 42)).collect { status ->
         MutationStatus.Succeeded, is MutationStatus.Retrying, MutationStatus.Pending, null -> Unit
     }
 }
+
+// Cancel pending or retrying work for a key, including its persisted record.
+queue.cancel(MutationKey.of("like", "video", 42))
 ```
+
+The queue retains the most recent statuses for up to 64 idle keys. Set `maxStatuses` on
+`MutationQueue` if the UI needs a different retention limit; observe a flow while its mutation is
+active to receive every status transition.
 
 **Coalescing.** Enqueueing under the same `MutationKey` while a mutation is still pending/retrying
 replaces it — including cancelling an in-progress retry backoff — so rapidly toggling like/unlike
@@ -211,7 +247,9 @@ object SetLikeStateCodec : MutationCodec<LikeBody> {
         Json.encodeToString(Payload((endpoint as SetLikeState).videoId, body?.liked ?: false))
     override fun decode(payload: String): DecodedMutation<LikeBody> {
         val p = Json.decodeFromString<Payload>(payload)
-        return DecodedMutation(SetLikeState(p.videoId), LikeBody(p.liked), null)
+        // The reified factory records LikeBody's TypeInfo, which the client needs to serialize
+        // the body on replay. (A typed body without its TypeInfo fails with EncodingFailed.)
+        return DecodedMutation(SetLikeState(p.videoId), LikeBody(p.liked))
     }
     @Serializable private data class Payload(val videoId: Int, val liked: Boolean)
 }
@@ -400,3 +438,22 @@ import io.github.maniramezan.kenwork.testing.*
 `mockNetworkClient` defaults `retryPolicy` to `RetryPolicy.None` so tests are deterministic; opt in
 with a `DefaultRetryPolicy`/custom policy as above. `FakeReachabilityGate.setReachable(...)` lets a
 test resume a pending `awaitReachable()`.
+
+To test code *above* the client (repositories, mutation queues, ViewModels), skip HTTP entirely
+with `FakeApiClient`. It records every request and returns whatever its handler produces:
+
+```kotlin
+@Test fun cachesVideos() = runTest {
+    val api = FakeApiClient { request -> if (request.index == 0) Video(42, "Hi") else throw NetworkError.Timeout }
+    val repo = GenericRepository<Video>(api, CacheBasedLocalDataSource(InMemoryCache()), scope = backgroundScope)
+    repo.fetch(GetVideo(42), key)
+    repo.fetch(GetVideo(42), key)          // served from cache
+    assertEquals(1, api.requests.size)
+}
+
+// Assert on logging, e.g. that no token is ever logged; the previous sink/level are restored.
+withRecordedLogs(LogLevel.DEBUG) { sink ->
+    runBlocking { client.request<Video>(GetVideo(42)) }
+    assertTrue(sink.entries.none { "Bearer" in it.message })
+}
+```

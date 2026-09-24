@@ -62,6 +62,8 @@ subprojects {
     // publishing (vanniktech, configured from the root gradle.properties POM_* keys).
     // Two plugin IDs cover this: the legacy Android library plugin, and the newer
     // Android multiplatform library plugin used by KMP modules like network-core.
+    // :samples is an Android library for build purposes only and is never published.
+    if (name == "samples") return@subprojects
     pluginManager.withPlugin("com.android.library") {
         pluginManager.apply("org.jetbrains.dokka")
         pluginManager.apply("com.vanniktech.maven.publish")
