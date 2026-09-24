@@ -21,6 +21,20 @@ private data class ReactiveItem(
     val value: String,
 )
 
+/** Parks the first [read] (the initial fetch's cache read) until [firstRead] completes. */
+private class GatedFirstReadLocalDataSource(
+    private val delegate: LocalDataSource<ReactiveItem>,
+) : LocalDataSource<ReactiveItem> by delegate {
+    val firstRead = CompletableDeferred<Unit>()
+    private var reads = 0
+
+    override suspend fun read(key: CacheKey): ReactiveItem? {
+        val snapshot = delegate.read(key)
+        if (reads++ == 0) firstRead.await()
+        return snapshot
+    }
+}
+
 private class ReactiveEndpoint : NetworkEndpoint {
     override val baseUrl = "https://api.test"
     override val path = "items/1"
@@ -182,5 +196,37 @@ class RepositoryReactiveTest {
             runCurrent()
 
             assertEquals(listOf(ReactiveItem("net"), null), emissions)
+        }
+
+    @Test
+    fun `stream never ends on a stale initial read when a change lands mid-fetch`() =
+        runTest {
+            val cache = InMemoryCache<ReactiveItem>()
+            cache.setValue(ReactiveItem("stale"), key)
+            val local = GatedFirstReadLocalDataSource(CacheBasedLocalDataSource(cache))
+            val network =
+                object : NetworkDataSource {
+                    override suspend fun <T> request(
+                        endpoint: NetworkEndpoint,
+                        body: Any?,
+                        bodyType: TypeInfo?,
+                        responseType: TypeInfo,
+                    ): T = error("cache hit expected")
+                }
+            val repository = GenericRepository<ReactiveItem>(network, local, scope = backgroundScope)
+
+            val emissions = mutableListOf<ReactiveItem>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                repository.stream(endpoint, key, CachePolicy.ReturnCacheElseLoad).collect { emissions += it }
+            }
+            runCurrent()
+
+            // The initial fetch has already read "stale" and is parked; a newer value lands.
+            cache.setValue(ReactiveItem("fresh"), key)
+            runCurrent()
+            local.firstRead.complete(Unit)
+            runCurrent()
+
+            assertEquals(listOf(ReactiveItem("fresh")), emissions)
         }
 }
