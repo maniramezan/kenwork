@@ -10,6 +10,12 @@ plugins {
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.maven.publish) apply false
+    alias(libs.plugins.binary.compatibility.validator)
+    alias(libs.plugins.android.bcv.bridge) apply false
+}
+
+apiValidation {
+    ignoredProjects.addAll(listOf("samples"))
 }
 
 // Single source of truth for the published version: the release-please manifest
@@ -31,6 +37,37 @@ allprojects {
 
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     jvmTarget = "17"
+}
+
+tasks.register("apiDump") {
+    group = "verification"
+    description = "Dumps public API declarations for all published modules"
+    dependsOn(
+        ":network-core:apiDump",
+        ":cache:releaseApiDump",
+        ":mutations:releaseApiDump",
+        ":network:releaseApiDump",
+        ":repository:releaseApiDump",
+        ":testing:releaseApiDump",
+    )
+}
+
+val apiCheckTask =
+    tasks.register("apiCheck") {
+        group = "verification"
+        description = "Verifies public API declarations for all published modules against golden files"
+        dependsOn(
+            ":network-core:apiCheck",
+            ":cache:releaseApiCheck",
+            ":mutations:releaseApiCheck",
+            ":network:releaseApiCheck",
+            ":repository:releaseApiCheck",
+            ":testing:releaseApiCheck",
+        )
+    }
+
+tasks.named("check") {
+    dependsOn(apiCheckTask)
 }
 
 // Aggregate the published modules' KDoc into a single Dokka HTML site (build/dokka/html)
@@ -67,6 +104,7 @@ subprojects {
     pluginManager.withPlugin("com.android.library") {
         pluginManager.apply("org.jetbrains.dokka")
         pluginManager.apply("com.vanniktech.maven.publish")
+        pluginManager.apply("io.github.tjokinen.android-bcv-bridge")
     }
     pluginManager.withPlugin("com.android.kotlin.multiplatform.library") {
         pluginManager.apply("org.jetbrains.dokka")

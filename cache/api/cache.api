@@ -1,0 +1,189 @@
+public final class io/github/maniramezan/kenwork/cache/AnyCache : io/github/maniramezan/kenwork/cache/Cache {
+	public fun <init> (Lio/github/maniramezan/kenwork/cache/Cache;)V
+	public fun changes ()Lkotlinx/coroutines/flow/Flow;
+	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeValue (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun timestamp (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun value (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/github/maniramezan/kenwork/cache/Cache {
+	public fun changes ()Lkotlinx/coroutines/flow/Flow;
+	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun removeValue (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun timestamp (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun value (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/cache/Cache$DefaultImpls {
+	public static fun changes (Lio/github/maniramezan/kenwork/cache/Cache;)Lkotlinx/coroutines/flow/Flow;
+	public static fun entry (Lio/github/maniramezan/kenwork/cache/Cache;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/github/maniramezan/kenwork/cache/CacheChange {
+}
+
+public final class io/github/maniramezan/kenwork/cache/CacheChange$Cleared : io/github/maniramezan/kenwork/cache/CacheChange {
+	public static final field INSTANCE Lio/github/maniramezan/kenwork/cache/CacheChange$Cleared;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CacheChange$Removed : io/github/maniramezan/kenwork/cache/CacheChange {
+	public fun <init> (Lio/github/maniramezan/kenwork/cache/CacheKey;)V
+	public final fun component1 ()Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public final fun copy (Lio/github/maniramezan/kenwork/cache/CacheKey;)Lio/github/maniramezan/kenwork/cache/CacheChange$Removed;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/cache/CacheChange$Removed;Lio/github/maniramezan/kenwork/cache/CacheKey;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/cache/CacheChange$Removed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CacheChange$Updated : io/github/maniramezan/kenwork/cache/CacheChange {
+	public fun <init> (Lio/github/maniramezan/kenwork/cache/CacheKey;)V
+	public final fun component1 ()Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public final fun copy (Lio/github/maniramezan/kenwork/cache/CacheKey;)Lio/github/maniramezan/kenwork/cache/CacheChange$Updated;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/cache/CacheChange$Updated;Lio/github/maniramezan/kenwork/cache/CacheKey;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/cache/CacheChange$Updated;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKey ()Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CacheEntry {
+	public fun <init> (Ljava/lang/Object;J)V
+	public final fun component1 ()Ljava/lang/Object;
+	public final fun component2 ()J
+	public final fun copy (Ljava/lang/Object;J)Lio/github/maniramezan/kenwork/cache/CacheEntry;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/cache/CacheEntry;Ljava/lang/Object;JILjava/lang/Object;)Lio/github/maniramezan/kenwork/cache/CacheEntry;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getTimestamp ()J
+	public final fun getValue ()Ljava/lang/Object;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CacheKey {
+	public static final field Companion Lio/github/maniramezan/kenwork/cache/CacheKey$Companion;
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/cache/CacheKey;Ljava/lang/String;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CacheKey$Companion {
+	public final fun components (Ljava/util/List;Ljava/lang/String;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public static synthetic fun components$default (Lio/github/maniramezan/kenwork/cache/CacheKey$Companion;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public final fun endpoint (Ljava/lang/String;Ljava/util/Map;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public static synthetic fun endpoint$default (Lio/github/maniramezan/kenwork/cache/CacheKey$Companion;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public final fun url (Ljava/lang/String;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+	public final fun user (Ljava/lang/String;Ljava/lang/String;)Lio/github/maniramezan/kenwork/cache/CacheKey;
+}
+
+public abstract interface class io/github/maniramezan/kenwork/cache/CachePolicy {
+	public static final field Companion Lio/github/maniramezan/kenwork/cache/CachePolicy$Companion;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CachePolicy$Companion {
+	public final fun getDefault ()Lio/github/maniramezan/kenwork/cache/CachePolicy;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CachePolicy$ReloadIgnoringCache : io/github/maniramezan/kenwork/cache/CachePolicy {
+	public static final field INSTANCE Lio/github/maniramezan/kenwork/cache/CachePolicy$ReloadIgnoringCache;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CachePolicy$ReturnCacheElseLoad : io/github/maniramezan/kenwork/cache/CachePolicy {
+	public static final field INSTANCE Lio/github/maniramezan/kenwork/cache/CachePolicy$ReturnCacheElseLoad;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CachePolicy$ReturnCacheIfNotExpired : io/github/maniramezan/kenwork/cache/CachePolicy {
+	public fun <init> (J)V
+	public final fun component1 ()J
+	public final fun copy (J)Lio/github/maniramezan/kenwork/cache/CachePolicy$ReturnCacheIfNotExpired;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/cache/CachePolicy$ReturnCacheIfNotExpired;JILjava/lang/Object;)Lio/github/maniramezan/kenwork/cache/CachePolicy$ReturnCacheIfNotExpired;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxAgeMillis ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/cache/CachePolicyKt {
+	public static final fun shouldUseCachedData (Lio/github/maniramezan/kenwork/cache/CachePolicy;J)Z
+}
+
+public final class io/github/maniramezan/kenwork/cache/FileSystemCache : io/github/maniramezan/kenwork/cache/PersistentCache, io/github/maniramezan/kenwork/cache/TimestampedCache {
+	public synthetic fun <init> (Ljava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Ljava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function0;Ljava/lang/Long;)V
+	public synthetic fun <init> (Ljava/io/File;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/CoroutineContext;Lkotlin/jvm/functions/Function0;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun changes ()Lkotlinx/coroutines/flow/Flow;
+	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeValue (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun timestamp (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun value (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/cache/InMemoryCache : io/github/maniramezan/kenwork/cache/TimestampedCache {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/Integer;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Ljava/lang/Integer;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun changes ()Lkotlinx/coroutines/flow/Flow;
+	public final fun count (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun removeExpiredEntries (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeValue (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun timestamp (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun value (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/cache/LayeredCache : io/github/maniramezan/kenwork/cache/Cache {
+	public fun <init> (Lio/github/maniramezan/kenwork/cache/Cache;Lio/github/maniramezan/kenwork/cache/Cache;)V
+	public synthetic fun <init> (Lio/github/maniramezan/kenwork/cache/Cache;Lio/github/maniramezan/kenwork/cache/Cache;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun changes ()Lkotlinx/coroutines/flow/Flow;
+	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeValue (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun timestamp (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun value (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/github/maniramezan/kenwork/cache/PersistentCache : io/github/maniramezan/kenwork/cache/Cache {
+}
+
+public final class io/github/maniramezan/kenwork/cache/PersistentCache$DefaultImpls {
+	public static fun changes (Lio/github/maniramezan/kenwork/cache/PersistentCache;)Lkotlinx/coroutines/flow/Flow;
+	public static fun entry (Lio/github/maniramezan/kenwork/cache/PersistentCache;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/github/maniramezan/kenwork/cache/TimestampedCache : io/github/maniramezan/kenwork/cache/Cache {
+	public abstract fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/cache/TimestampedCache$DefaultImpls {
+	public static fun changes (Lio/github/maniramezan/kenwork/cache/TimestampedCache;)Lkotlinx/coroutines/flow/Flow;
+	public static fun entry (Lio/github/maniramezan/kenwork/cache/TimestampedCache;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
