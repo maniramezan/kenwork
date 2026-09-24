@@ -163,4 +163,62 @@ class FileSystemCacheTest {
             assertTrue(foreign.exists())
             assertEquals(listOf("notes.tmp"), dir.list()?.toList())
         }
+
+    @Test
+    fun `null size limit allows unbounded writes`() =
+        runTest {
+            val cache =
+                FileSystemCache(
+                    directory = dir,
+                    encode = { it },
+                    decode = { it },
+                    maxSizeBytes = null,
+                    ioContext = UnconfinedTestDispatcher(testScheduler),
+                )
+            cache.setValue("one", key)
+            cache.setValue("two", CacheKey("second"))
+
+            assertEquals("one", cache.value(key))
+            assertEquals("two", cache.value(CacheKey("second")))
+        }
+
+    @Test
+    fun `eviction reports the original cache key`() =
+        runTest {
+            val cache =
+                FileSystemCache(
+                    directory = dir,
+                    encode = { it },
+                    decode = { it },
+                    maxSizeBytes = 8,
+                    ioContext = UnconfinedTestDispatcher(testScheduler),
+                )
+            val first = CacheKey("first")
+            val second = CacheKey("second")
+            val changes = mutableListOf<CacheChange>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                cache.changes().collect { changes += it }
+            }
+
+            cache.setValue("one", first, 1)
+            assertTrue(dir.listFiles()!!.single().setLastModified(1L))
+            cache.setValue("two", second, 2)
+
+            assertEquals(listOf(CacheChange.Updated(first), CacheChange.Updated(second), CacheChange.Removed(first)), changes)
+            assertNull(cache.value(first))
+            assertEquals("two", cache.value(second))
+        }
+
+    @Test
+    fun `old constructor signature remains available to compiled callers`() {
+        val expected =
+            listOf(
+                File::class.java,
+                Function1::class.java,
+                Function1::class.java,
+                kotlin.coroutines.CoroutineContext::class.java,
+                Function0::class.java,
+            )
+        assertTrue(FileSystemCache::class.java.declaredConstructors.any { it.parameterTypes.toList() == expected })
+    }
 }

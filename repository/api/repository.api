@@ -1,0 +1,52 @@
+public final class io/github/maniramezan/kenwork/repository/CacheBasedLocalDataSource : io/github/maniramezan/kenwork/repository/LocalDataSource {
+	public fun <init> (Lio/github/maniramezan/kenwork/cache/Cache;)V
+	public fun changes ()Lkotlinx/coroutines/flow/Flow;
+	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun read (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun remove (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun timestamp (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun write (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/repository/GenericRepository : io/github/maniramezan/kenwork/repository/Repository {
+	public fun <init> (Lio/github/maniramezan/kenwork/network/NetworkDataSource;Lio/github/maniramezan/kenwork/repository/LocalDataSource;Lio/ktor/util/reflect/TypeInfo;Lkotlin/jvm/functions/Function0;Lkotlinx/coroutines/CoroutineScope;)V
+	public synthetic fun <init> (Lio/github/maniramezan/kenwork/network/NetworkDataSource;Lio/github/maniramezan/kenwork/repository/LocalDataSource;Lio/ktor/util/reflect/TypeInfo;Lkotlin/jvm/functions/Function0;Lkotlinx/coroutines/CoroutineScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun close ()V
+	public fun fetch (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun stream (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;)Lkotlinx/coroutines/flow/Flow;
+	public fun streamOrNull (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public abstract interface class io/github/maniramezan/kenwork/repository/LocalDataSource {
+	public fun changes ()Lkotlinx/coroutines/flow/Flow;
+	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun read (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun remove (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun timestamp (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun write (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/repository/LocalDataSource$DefaultImpls {
+	public static fun changes (Lio/github/maniramezan/kenwork/repository/LocalDataSource;)Lkotlinx/coroutines/flow/Flow;
+	public static fun entry (Lio/github/maniramezan/kenwork/repository/LocalDataSource;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/github/maniramezan/kenwork/repository/Repository {
+	public abstract fun fetch (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun fetch$default (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun stream (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun stream$default (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public fun streamOrNull (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun streamOrNull$default (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public final class io/github/maniramezan/kenwork/repository/Repository$DefaultImpls {
+	public static synthetic fun fetch$default (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun stream (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun stream$default (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public static fun streamOrNull (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun streamOrNull$default (Lio/github/maniramezan/kenwork/repository/Repository;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Lio/github/maniramezan/kenwork/cache/CacheKey;Lio/github/maniramezan/kenwork/cache/CachePolicy;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+}
+

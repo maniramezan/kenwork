@@ -1,0 +1,116 @@
+public final class io/github/maniramezan/kenwork/testing/FakeApiClient : io/github/maniramezan/kenwork/network/NetworkDataSource {
+	public fun <init> ()V
+	public fun <init> (Lkotlin/jvm/functions/Function2;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function2;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getRequests ()Ljava/util/List;
+	public fun request (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Ljava/lang/Object;Lio/ktor/util/reflect/TypeInfo;Lio/ktor/util/reflect/TypeInfo;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/testing/FakeApiClient$RecordedRequest {
+	public fun <init> (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Ljava/lang/Object;Lio/ktor/util/reflect/TypeInfo;I)V
+	public final fun component1 ()Lio/github/maniramezan/kenwork/network/NetworkEndpoint;
+	public final fun component2 ()Ljava/lang/Object;
+	public final fun component3 ()Lio/ktor/util/reflect/TypeInfo;
+	public final fun component4 ()I
+	public final fun copy (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Ljava/lang/Object;Lio/ktor/util/reflect/TypeInfo;I)Lio/github/maniramezan/kenwork/testing/FakeApiClient$RecordedRequest;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/testing/FakeApiClient$RecordedRequest;Lio/github/maniramezan/kenwork/network/NetworkEndpoint;Ljava/lang/Object;Lio/ktor/util/reflect/TypeInfo;IILjava/lang/Object;)Lio/github/maniramezan/kenwork/testing/FakeApiClient$RecordedRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/Object;
+	public final fun getEndpoint ()Lio/github/maniramezan/kenwork/network/NetworkEndpoint;
+	public final fun getIndex ()I
+	public final fun getResponseType ()Lio/ktor/util/reflect/TypeInfo;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/testing/FakeAuthorizationProvider : io/github/maniramezan/kenwork/network/AuthorizationProvider {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun currentAuthorization (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getCurrentToken ()Ljava/lang/String;
+	public final fun getRefreshCount ()I
+	public fun refreshAuthorizationIfNeeded (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/testing/FakeReachabilityGate : io/github/maniramezan/kenwork/network/ReachabilityGate {
+	public fun <init> ()V
+	public fun <init> (Z)V
+	public synthetic fun <init> (ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun awaitReachable (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getAwaitCount ()I
+	public final fun isReachable ()Z
+	public final fun setReachable (Z)V
+}
+
+public final class io/github/maniramezan/kenwork/testing/MockNetworkKt {
+	public static final fun jsonResponse (Lio/ktor/client/engine/mock/MockRequestHandleScope;Ljava/lang/String;Lio/ktor/http/HttpStatusCode;)Lio/ktor/client/request/HttpResponseData;
+	public static synthetic fun jsonResponse$default (Lio/ktor/client/engine/mock/MockRequestHandleScope;Ljava/lang/String;Lio/ktor/http/HttpStatusCode;ILjava/lang/Object;)Lio/ktor/client/request/HttpResponseData;
+	public static final fun mockNetworkClient (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;IJLio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lio/github/maniramezan/kenwork/network/RequestInterceptor;Lio/github/maniramezan/kenwork/network/RequestHeaderProvider;Lkotlin/jvm/functions/Function3;)Lio/github/maniramezan/kenwork/network/NetworkClient;
+	public static final synthetic fun mockNetworkClient (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;IJLio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lkotlin/jvm/functions/Function3;)Lio/github/maniramezan/kenwork/network/NetworkClient;
+	public static synthetic fun mockNetworkClient$default (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;IJLio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lio/github/maniramezan/kenwork/network/RequestInterceptor;Lio/github/maniramezan/kenwork/network/RequestHeaderProvider;Lkotlin/jvm/functions/Function3;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/network/NetworkClient;
+	public static synthetic fun mockNetworkClient$default (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;IJLio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lkotlin/jvm/functions/Function3;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/network/NetworkClient;
+}
+
+public final class io/github/maniramezan/kenwork/testing/RecordingLogSink : io/github/maniramezan/kenwork/network/StructuredLogSink {
+	public fun <init> ()V
+	public final fun getEntries ()Ljava/util/List;
+	public fun log (Lio/github/maniramezan/kenwork/network/LogLevel;Lio/github/maniramezan/kenwork/network/LogCategory;Ljava/lang/String;Ljava/lang/Throwable;)V
+	public fun log (Lio/github/maniramezan/kenwork/network/LogLevel;Lio/github/maniramezan/kenwork/network/LogCategory;Ljava/lang/String;Ljava/lang/Throwable;Ljava/util/Map;)V
+}
+
+public final class io/github/maniramezan/kenwork/testing/RecordingLogSink$Entry {
+	public fun <init> (Lio/github/maniramezan/kenwork/network/LogLevel;Lio/github/maniramezan/kenwork/network/LogCategory;Ljava/lang/String;Ljava/lang/Throwable;Ljava/util/Map;)V
+	public final fun component1 ()Lio/github/maniramezan/kenwork/network/LogLevel;
+	public final fun component2 ()Lio/github/maniramezan/kenwork/network/LogCategory;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Throwable;
+	public final fun component5 ()Ljava/util/Map;
+	public final fun copy (Lio/github/maniramezan/kenwork/network/LogLevel;Lio/github/maniramezan/kenwork/network/LogCategory;Ljava/lang/String;Ljava/lang/Throwable;Ljava/util/Map;)Lio/github/maniramezan/kenwork/testing/RecordingLogSink$Entry;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/testing/RecordingLogSink$Entry;Lio/github/maniramezan/kenwork/network/LogLevel;Lio/github/maniramezan/kenwork/network/LogCategory;Ljava/lang/String;Ljava/lang/Throwable;Ljava/util/Map;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/testing/RecordingLogSink$Entry;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getCategory ()Lio/github/maniramezan/kenwork/network/LogCategory;
+	public final fun getLevel ()Lio/github/maniramezan/kenwork/network/LogLevel;
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getThrowable ()Ljava/lang/Throwable;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/maniramezan/kenwork/testing/RecordingLogSinkKt {
+	public static final fun withRecordedLogs (Lio/github/maniramezan/kenwork/network/LogLevel;Lkotlin/jvm/functions/Function1;)Ljava/lang/Object;
+	public static synthetic fun withRecordedLogs$default (Lio/github/maniramezan/kenwork/network/LogLevel;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/testing/RecordingNetworkEventListener : io/github/maniramezan/kenwork/network/NetworkEventListener {
+	public fun <init> ()V
+	public final fun getEvents ()Ljava/util/List;
+	public fun onEvent (Lio/github/maniramezan/kenwork/network/NetworkEvent;)V
+}
+
+public final class io/github/maniramezan/kenwork/testing/RecordingRetryPolicy : io/github/maniramezan/kenwork/network/RetryPolicy {
+	public fun <init> ()V
+	public fun <init> (Lio/github/maniramezan/kenwork/network/RetryPolicy;)V
+	public synthetic fun <init> (Lio/github/maniramezan/kenwork/network/RetryPolicy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDecisions ()Ljava/util/List;
+	public fun retryDelayMillis (ILio/github/maniramezan/kenwork/network/HttpMethod;Lio/github/maniramezan/kenwork/network/NetworkError;)Ljava/lang/Long;
+}
+
+public final class io/github/maniramezan/kenwork/testing/RecordingRetryPolicy$Decision {
+	public fun <init> (ILio/github/maniramezan/kenwork/network/HttpMethod;Lio/github/maniramezan/kenwork/network/NetworkError;Ljava/lang/Long;)V
+	public final fun component1 ()I
+	public final fun component2 ()Lio/github/maniramezan/kenwork/network/HttpMethod;
+	public final fun component3 ()Lio/github/maniramezan/kenwork/network/NetworkError;
+	public final fun component4 ()Ljava/lang/Long;
+	public final fun copy (ILio/github/maniramezan/kenwork/network/HttpMethod;Lio/github/maniramezan/kenwork/network/NetworkError;Ljava/lang/Long;)Lio/github/maniramezan/kenwork/testing/RecordingRetryPolicy$Decision;
+	public static synthetic fun copy$default (Lio/github/maniramezan/kenwork/testing/RecordingRetryPolicy$Decision;ILio/github/maniramezan/kenwork/network/HttpMethod;Lio/github/maniramezan/kenwork/network/NetworkError;Ljava/lang/Long;ILjava/lang/Object;)Lio/github/maniramezan/kenwork/testing/RecordingRetryPolicy$Decision;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttempt ()I
+	public final fun getDelayMillis ()Ljava/lang/Long;
+	public final fun getError ()Lio/github/maniramezan/kenwork/network/NetworkError;
+	public final fun getMethod ()Lio/github/maniramezan/kenwork/network/HttpMethod;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+

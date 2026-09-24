@@ -115,6 +115,7 @@ val disk = FileSystemCache(
     directory = File(context.cacheDir, "videos"),
     encode = { Json.encodeToString(Video.serializer(), it) },
     decode = { Json.decodeFromString(Video.serializer(), it) },
+    maxSizeBytes = 50L * 1024 * 1024, // default; pass null for an unbounded cache
 )
 
 // Two-tier: memory over the disk cache, promoting hits with their original timestamp.
