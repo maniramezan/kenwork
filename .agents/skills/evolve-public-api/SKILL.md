@@ -15,7 +15,7 @@ is not enough.
 |---|---|---|
 | New class, new function, new top-level declaration in a **new** file | Yes | KDoc + tests |
 | New parameter on an existing function/constructor (even with a default) | **No** | Add a hidden shim (step 2) |
-| Changing a default value | Yes (ABI) | Document the behavior change in `MIGRATION.md` |
+| Changing a default value | Yes (ABI) | Document the behavior change in the PR description |
 | Changing a parameter or return type | **No** | Add a new overload, deprecate the old one normally |
 | Removing/renaming a public declaration | **No** | Deprecate (WARNING → ERROR → HIDDEN) across releases |
 | Moving a public **top-level function/property** to another file | **No** | Its JVM facade (`FooKt`) changes; keep it in place |
@@ -23,7 +23,7 @@ is not enough.
 | New subtype of a public `sealed` type / new `enum` constant | Source-breaking for exhaustive `when` | Needs a major-version decision; ask first |
 | `data class` ⇄ regular class, or reordering data-class properties | **No** | Changes `componentN`/`copy`; don't |
 | `public inline` function body change | Inlined into callers | Only reference public/`@PublishedApi` API from it |
-| New `init { require(...) }` validation | ABI-safe, behavior change | `MIGRATION.md` entry |
+| New `init { require(...) }` validation | ABI-safe, behavior change | PR description entry |
 
 ## 2. The hidden-shim pattern (adding a parameter)
 
@@ -57,7 +57,7 @@ public class Foo(
    don't try; review the shim's parameter list against the previous release tag instead:
    `git show <last-tag>:path/to/File.kt`.
 3. Run `./gradlew check`.
-4. If behavior changed, add a bullet under the newest "Upgrading kenwork" section of
-   `MIGRATION.md`, and update `docs/cookbook.md`/`docs/parity.md` when relevant.
+4. If behavior changed, add an upgrade note to the PR description, and update
+   `docs/cookbook.md`/`docs/parity.md` when relevant.
 5. Use the right Conventional Commit type: `feat:` for additions, `feat!:` plus a
    `BREAKING CHANGE:` footer only for an intentional, agreed break.

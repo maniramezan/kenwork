@@ -24,7 +24,7 @@ nothing in this repo. Do not add edges without updating `ARCHITECTURE.md`.
 
 Key docs: `ARCHITECTURE.md` (design and concurrency), `docs/cookbook.md` (recipes),
 `docs/security.md` (credential/logging/persistence rules), `docs/platforms.md` (KMP boundary),
-`docs/parity.md` (SwiftyNetwork mapping), `MIGRATION.md` (upgrade notes), `docs/release.md`.
+`docs/parity.md` (SwiftyNetwork mapping), `docs/release.md`.
 
 Repository skills for all AI agents live in `.agents/skills/`. Read the matching `SKILL.md` when
 working on a public API (`evolve-public-api`), adding a module (`add-module`), or verifying changes
@@ -85,7 +85,7 @@ source-compatible can still be **binary-incompatible**. Before touching anything
   exhaustively `when` over (`NetworkError`, `CachePolicy`, `CacheChange`, `MutationStatus`,
   `LogLevel`, `LogCategory`) without a major-version plan.
 - Don't turn a `data class` into a regular class or vice versa (it changes `componentN`/`copy`).
-- Behavior changes that callers could observe belong in `MIGRATION.md`.
+- Document behavior changes that callers could observe in the PR description.
 
 ## Tests
 

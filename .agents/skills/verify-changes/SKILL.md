@@ -47,6 +47,6 @@ Check `git diff` for:
 - [ ] No credentials, tokens, bodies, or full URLs are logged or persisted.
 - [ ] Time, randomness, and dispatchers are injectable in new code, and tests use them.
 - [ ] Bug fixes come with a test that fails without the fix.
-- [ ] Docs updated: `docs/cookbook.md` for user-facing APIs, `MIGRATION.md` for behavior changes,
-  `ARCHITECTURE.md` for structural changes, `docs/parity.md` for SwiftyNetwork mapping.
+- [ ] Docs updated: `docs/cookbook.md` for user-facing APIs, the PR description for behavior
+  changes, `ARCHITECTURE.md` for structural changes, `docs/parity.md` for SwiftyNetwork mapping.
 - [ ] The commit message uses the right Conventional Commit type (see `AGENTS.md`).

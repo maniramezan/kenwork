@@ -121,7 +121,6 @@ with the `:testing` fakes, so the samples can't drift from the API. The module i
 - [docs/security.md](docs/security.md) — credentials, logging, persistence, and retry boundaries.
 - [docs/graphql.md](docs/graphql.md) — GraphQL transport and application-error handling.
 - [docs/parity.md](docs/parity.md) — SwiftyNetwork ↔ kenwork mapping.
-- [MIGRATION.md](MIGRATION.md) — moving an existing Ktor/auth layer onto kenwork.
 - [docs/release.md](docs/release.md) — how releases reach Maven Central.
 - API reference (Dokka): published to GitHub Pages on pushes to `main`.
 
