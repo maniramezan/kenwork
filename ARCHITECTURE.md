@@ -28,8 +28,26 @@ Ktor HttpClient → OkHttp engine (interceptors, disk cache, CertificatePinner)
 - `:repository` depends on both.
 - `:mutations` depends on `:network` and accepts a caller-owned coroutine scope and persistence store.
 - `:testing` supplies test doubles over `:network`.
+- `:samples` (not published) wires every module into a small feature; its tests keep the samples
+  compiling and correct.
 - `:network-core` is independent of this stack. It configures JSON and redirect policy on a
   consumer-supplied Ktor engine; it does not implement endpoint, OAuth, cache, or repository APIs.
+
+### Inside `:network`
+
+`NetworkClient` only orchestrates (client lifecycle, the retry loop, the 401 loop, and request
+building). Its collaborators are internal and unit-tested on their own:
+
+| File | Responsibility |
+|---|---|
+| `HttpClientFactory.kt` | Builds the Ktor client: explicit engine, or OkHttp with interceptors, disk cache, and pinning |
+| `ResponseHandling.kt` | 2xx validation, `Retry-After` parsing, body decoding (`Unit`/`EmptyResponse` skip the decoder), exception → `NetworkError` mapping |
+| `HttpStatus.kt` | Status constants and the single "is this failure transient?" rule shared by `DefaultRetryPolicy` and telemetry |
+| `NetworkTelemetry.kt` | `NetworkEvent` construction and low-cardinality `endpointId`s |
+
+`:repository` splits the same way: `Repository.kt` holds the interface, `GenericRepository.kt` the
+default implementation. In `:mutations`, `MutationQueue` is the public API, while `KeyWorker.kt`
+holds the per-key coalescing and retry state machine.
 
 ## Concurrency model
 
@@ -51,7 +69,9 @@ coroutines as follows:
 caller starts a single `Deferred` on the repository's scope, registered under a `Mutex`; the rest
 await it. One network request serves the whole burst — the same pattern as the auth refresh above.
 Pass your own `CoroutineScope` to tie those loads to a lifecycle you own (otherwise an internal
-`SupervisorJob` is created and `close()` cancels it).
+`SupervisorJob` is created and `close()` cancels it). Each load runs under its own completing
+`SupervisorJob`, so a failed load reaches only the callers awaiting it and never cancels a
+caller-supplied scope.
 
 ### Cache tiers
 
@@ -78,7 +98,11 @@ Beyond `NetworkMonitor`, the data layer is observable: `Cache.changes()` /
 (read-time LRU promotion does **not** emit). `Repository.stream(endpoint, key, policy)` subscribes
 to `changes()` *before* running its initial `fetch` (so a mutation landing in between isn't
 missed), then re-emits the stored value whenever the local store reports a change for that key
-(`distinctUntilChanged`), giving an offline-first single-source-of-truth stream for UIs.
+(`distinctUntilChanged`), giving an offline-first single-source-of-truth stream for UIs. If a
+change is emitted while the initial `fetch` is still running, the fetch result is dropped: the
+change was read after it landed, so it is at least as fresh, and emitting the fetch result after it
+could leave a stale value as the stream's latest emission. If the initial `fetch` fails, the flow
+fails with that error.
 
 ## Resilience: retry policy
 
@@ -139,9 +163,12 @@ dependency**. Consumers construct objects directly or wire them with their own D
 `MockEngine` (via the `:testing` module) drives `NetworkClient` with no sockets. Robolectric covers
 `NetworkMonitor`. The build enforces a JaCoCo line-coverage gate on the established Android library
 modules; the KMP core is outside that gate.
-Unit tests run on a Java 21 toolchain (Robolectric + compileSdk 36 require it).
+Unit tests run on a Java 21 toolchain (Robolectric + compileSdk 37 require it).
 
-The `:testing` module ships doubles for consumers: `mockNetworkClient` (now with `retryPolicy` /
-`reachabilityGate`), `jsonResponse`, `RecordingNetworkEventListener`, `FakeAuthorizationProvider`,
-`FakeReachabilityGate` (a controllable `ReachabilityGate`), and `RecordingRetryPolicy` (records
-retry decisions while delegating).
+The `:testing` module ships doubles for consumers: `mockNetworkClient` (a `NetworkClient` over
+`MockEngine`, with `retryPolicy` / `reachabilityGate` / observability hooks), `jsonResponse`,
+`FakeApiClient` (a scriptable `NetworkDataSource` for testing repositories, mutation queues, and
+ViewModels without HTTP), `RecordingNetworkEventListener`, `FakeAuthorizationProvider`,
+`FakeReachabilityGate` (a controllable `ReachabilityGate`), `RecordingRetryPolicy` (records retry
+decisions while delegating), and `RecordingLogSink` / `withRecordedLogs` (captures `KenworkLogger`
+output, restoring the previous logger afterwards).
