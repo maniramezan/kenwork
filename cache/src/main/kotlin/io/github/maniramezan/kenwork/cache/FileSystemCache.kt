@@ -29,11 +29,19 @@ import kotlin.coroutines.CoroutineContext
  * directory may be shared. A malformed or unreadable file reads back as `null` rather than
  * throwing.
  *
+ * When [maxSizeBytes] is set (default 50 MB), writes evict the oldest entries by last-modified
+ * time until total disk usage for owned cache files is within the limit. Pass `maxSizeBytes = null`
+ * to disable the limit (unbounded growth). Eviction emits [CacheChange.Removed] for keys this
+ * instance has read or written; files from an earlier process cannot be mapped back from their
+ * hashed names until they are read.
+ *
  * @param directory the storage directory; created on first write.
  * @param encode serializes a value to text.
  * @param decode parses text produced by [encode] back into a value.
  * @param ioContext context for blocking file I/O; defaults to [Dispatchers.IO].
  * @param currentTimeMillis time source, injectable for deterministic tests.
+ * @param maxSizeBytes maximum disk usage in bytes for owned cache files. Defaults to 50 MB.
+ *   Pass `null` for unbounded (not recommended for production).
  */
 public class FileSystemCache<V : Any>(
     private val directory: File,
@@ -41,9 +49,32 @@ public class FileSystemCache<V : Any>(
     private val decode: (String) -> V,
     private val ioContext: CoroutineContext = Dispatchers.IO,
     private val currentTimeMillis: () -> Long = System::currentTimeMillis,
+    private val maxSizeBytes: Long? = DEFAULT_MAX_SIZE_BYTES,
 ) : TimestampedCache<V>,
     PersistentCache<V> {
+    /** Binary-compatibility shim for callers compiled before [maxSizeBytes] was introduced. */
+    @Deprecated("Binary-compatibility shim; use the primary constructor.", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        directory: File,
+        encode: (V) -> String,
+        decode: (String) -> V,
+        ioContext: CoroutineContext = Dispatchers.IO,
+        currentTimeMillis: () -> Long = System::currentTimeMillis,
+    ) : this(
+        directory = directory,
+        encode = encode,
+        decode = decode,
+        ioContext = ioContext,
+        currentTimeMillis = currentTimeMillis,
+        maxSizeBytes = DEFAULT_MAX_SIZE_BYTES,
+    )
+
+    init {
+        require(maxSizeBytes == null || maxSizeBytes > 0) { "maxSizeBytes must be positive or null, got $maxSizeBytes" }
+    }
+
     private val mutex = Mutex()
+    private val knownKeys = mutableMapOf<String, CacheKey>()
 
     private val changeFlow =
         MutableSharedFlow<CacheChange>(
@@ -69,12 +100,19 @@ public class FileSystemCache<V : Any>(
         key: CacheKey,
         timestamp: Long,
     ) {
-        withContext(ioContext) { mutex.withLock { writeEntry(key, value, timestamp) } }
+        val evicted = withContext(ioContext) { mutex.withLock { writeEntry(key, value, timestamp) } }
         changeFlow.tryEmit(CacheChange.Updated(key))
+        evicted.forEach { changeFlow.tryEmit(CacheChange.Removed(it)) }
     }
 
     override suspend fun removeValue(key: CacheKey) {
-        val removed = withContext(ioContext) { mutex.withLock { fileFor(key).delete() } }
+        val removed =
+            withContext(ioContext) {
+                mutex.withLock {
+                    val file = fileFor(key)
+                    file.delete().also { if (it) knownKeys.remove(file.nameWithoutExtension) }
+                }
+            }
         if (removed) changeFlow.tryEmit(CacheChange.Removed(key))
     }
 
@@ -82,6 +120,7 @@ public class FileSystemCache<V : Any>(
         withContext(ioContext) {
             mutex.withLock {
                 directory.listFiles { file -> file.isOwnedEntryOrOrphanedTemp() }?.forEach { it.delete() }
+                knownKeys.clear()
             }
         }
         changeFlow.tryEmit(CacheChange.Cleared)
@@ -95,14 +134,14 @@ public class FileSystemCache<V : Any>(
             val separator = text.indexOf('\n')
             val timestamp = text.substring(0, separator).toLong()
             CacheEntry(decode(text.substring(separator + 1)), timestamp)
-        }.getOrNull()
+        }.getOrNull()?.also { knownKeys[file.nameWithoutExtension] = key }
     }
 
     private fun writeEntry(
         key: CacheKey,
         value: V,
         timestamp: Long,
-    ) {
+    ): List<CacheKey> {
         check(directory.exists() || directory.mkdirs()) { "Unable to create cache directory: $directory" }
         val destination = fileFor(key)
         val temporary = File.createTempFile(destination.name, TEMPORARY_SUFFIX, directory)
@@ -117,6 +156,32 @@ public class FileSystemCache<V : Any>(
         } finally {
             temporary.delete()
         }
+
+        knownKeys[destination.nameWithoutExtension] = key
+        return evictIfNeeded()
+    }
+
+    private fun evictIfNeeded(): List<CacheKey> {
+        val limit = maxSizeBytes ?: return emptyList()
+        val ownedFiles =
+            directory
+                .listFiles { file -> file.name.endsWith(SUFFIX) }
+                ?.sortedBy { it.lastModified() }
+                ?: return emptyList()
+
+        var totalBytes = ownedFiles.sumOf { it.length() }
+        if (totalBytes <= limit) return emptyList()
+
+        val evicted = mutableListOf<CacheKey>()
+        for (file in ownedFiles) {
+            if (totalBytes <= limit) break
+            val fileSize = file.length()
+            if (file.delete()) {
+                totalBytes -= fileSize
+                knownKeys.remove(file.nameWithoutExtension)?.let(evicted::add)
+            }
+        }
+        return evicted
     }
 
     private fun fileFor(key: CacheKey): File = File(directory, hash(key.rawValue) + SUFFIX)
@@ -147,5 +212,6 @@ public class FileSystemCache<V : Any>(
         private const val BYTE_MASK = 0xFF
         private const val NIBBLE_MASK = 0x0F
         private const val NIBBLE_BITS = 4
+        private const val DEFAULT_MAX_SIZE_BYTES = 50 * 1024 * 1024L
     }
 }
