@@ -3,6 +3,8 @@ package io.github.maniramezan.kenwork.mutations
 import app.cash.turbine.test
 import io.github.maniramezan.kenwork.network.DefaultRetryPolicy
 import io.github.maniramezan.kenwork.network.NetworkError
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -11,6 +13,37 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MutationQueueCancelTest {
+    @Test
+    fun `cancel interrupts an in-flight request and allows a new enqueue`() =
+        runTest {
+            val interrupted = CompletableDeferred<Unit>()
+            val apiClient =
+                RecordingApiClient { _, index ->
+                    if (index == 0) {
+                        try {
+                            awaitCancellation()
+                        } finally {
+                            interrupted.complete(Unit)
+                        }
+                    }
+                }
+            val queue = MutationQueue(apiClient = apiClient, scope = backgroundScope)
+            val key = MutationKey.of("like", "video", 5)
+
+            queue.enqueue(key, SetLikeState(5), LikeBody(true))
+            runCurrent()
+            queue.cancel(key)
+            runCurrent()
+
+            assertTrue(interrupted.isCompleted)
+            assertNull(queue.statusFlow(key).value)
+
+            queue.enqueue(key, SetLikeState(5), LikeBody(false))
+            settle()
+            assertEquals(2, apiClient.calls.size)
+            assertEquals(MutationStatus.Succeeded, queue.statusFlow(key).value)
+        }
+
     @Test
     fun `cancel resets statusFlow to null for the key`() =
         runTest {

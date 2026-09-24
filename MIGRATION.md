@@ -155,6 +155,9 @@ No source changes are required, but these fixes change runtime behavior:
   `false` instead of throwing `CancellationException` into non-cancelled callers.
 - **`MutationQueue.restore()`** skips (and keeps) a record whose codec fails to decode instead of
   aborting the entire restore, and no longer resends or deletes a mutation that is already running.
+- **`MutationQueue.statusFlow()`** retains at most 64 idle key statuses by default. Older terminal
+  statuses may read as `null` after other keys are used. Pass `maxStatuses` to change the limit.
+  `cancel(key)` stops the key's work, removes its persisted record, and resets its status to `null`.
 - **Fail-fast validation:** `InMemoryCache(maxSize < 0)` and `SslPinningConfiguration` hosts with
   no pins (or blank pins) throw `IllegalArgumentException` at construction.
 - **`FileSystemCache.removeAll()`** also deletes temporary files orphaned by a process death during

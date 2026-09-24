@@ -1,7 +1,10 @@
 package io.github.maniramezan.kenwork.mutations
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
@@ -54,5 +57,30 @@ class MutationQueueMemoryTest {
             val sample = MutationKey.of("item", 0)
             // The flow for `sample` was evicted; this call creates a *new* null flow.
             assertNull(queue.statusFlow(sample).value)
+        }
+
+    @Test
+    fun `status retention limit does not evict an active worker flow`() =
+        runTest {
+            val release = CompletableDeferred<Unit>()
+            val queue =
+                MutationQueue(
+                    apiClient = RecordingApiClient { _, _ -> release.await() },
+                    scope = backgroundScope,
+                    maxStatuses = 1,
+                )
+            val first = MutationKey.of("item", 1)
+            val second = MutationKey.of("item", 2)
+
+            queue.enqueue(first, SetLikeState(1), LikeBody(true))
+            runCurrent()
+            queue.enqueue(second, SetLikeState(2), LikeBody(true))
+            runCurrent()
+
+            assertEquals(MutationStatus.Pending, queue.statusFlow(first).value)
+            assertEquals(MutationStatus.Pending, queue.statusFlow(second).value)
+
+            release.complete(Unit)
+            settle()
         }
 }

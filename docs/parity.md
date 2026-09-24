@@ -56,7 +56,8 @@ These leverage Kotlin/coroutines idioms and have no required SwiftyNetwork count
   single network call.
 - **Background mutations:** `:mutations` (`MutationQueue`, `MutationKey`, `MutationStatus`,
   `MutationCodec`, `MutationStore`) queues fire-and-forget writes with coalescing, retry, and
-  optional persistence across process death.
+  optional persistence across process death. `MutationQueue.cancel` stops work for a key and
+  `maxStatuses` bounds retained idle statuses.
 - **Observability hooks:** `RequestInterceptor`, `RequestHeaderProvider`, and `StructuredLogSink`
   for tracing, context propagation, and structured logs without an OpenTelemetry dependency.
 - **Error helpers:** `NetworkError.httpStatusCode` exposes the status carried by any error case.

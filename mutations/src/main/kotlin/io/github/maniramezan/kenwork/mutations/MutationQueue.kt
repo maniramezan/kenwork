@@ -11,6 +11,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -39,6 +41,9 @@ import java.util.concurrent.ConcurrentHashMap
  * - **Persistence**: pass a [MutationCodec] to [enqueue] to have the mutation survive in [store]
  *   (see [MutationStore] for durability); omit it for a purely in-process, fire-and-forget mutation.
  * - **Status**: observe [statusFlow] for a key to reflect pending/retrying/succeeded/failed in the UI.
+ * - **Lifecycle & Cleanup**: completed workers are removed once idle, and [cancel] cancels in-flight
+ *   work, removes persisted records, and resets status to `null`. Internal status tracking is bounded
+ *   so the queue does not grow indefinitely.
  *
  * @param apiClient executes the underlying HTTP calls.
  * @param scope owns every mutation's execution + retry backoff; mutations outlive the caller's
@@ -47,6 +52,8 @@ import java.util.concurrent.ConcurrentHashMap
  * @param defaultRetryPolicy applied to mutations enqueued without an explicit `retryPolicy`.
  *   Defaults to retrying non-idempotent methods too — the whole point of this queue is to make
  *   `POST`/`PATCH` mutations retryable — unlike [DefaultRetryPolicy]'s own conservative default.
+ * @param maxStatuses maximum number of status flows to retain per queue instance. When exceeded,
+ *   the least-recently-accessed entries are evicted. Must be positive. Defaults to 64.
  * @param codecs [MutationCodec]s to register upfront, so [restore] can decode their records even
  *   before any matching [enqueue] call runs in this process. Enqueueing with a new codec also
  *   registers it.
@@ -56,21 +63,45 @@ public class MutationQueue(
     private val scope: CoroutineScope,
     private val store: MutationStore = InMemoryMutationStore(),
     private val defaultRetryPolicy: RetryPolicy = DefaultRetryPolicy(retryNonIdempotent = true),
+    private val maxStatuses: Int = 64,
     codecs: List<MutationCodec<*>> = emptyList(),
 ) {
+    init {
+        require(maxStatuses > 0) { "maxStatuses must be positive, got $maxStatuses" }
+    }
+
     private val codecsById =
         ConcurrentHashMap<String, MutationCodec<*>>().apply {
             codecs.forEach { put(it.id, it) }
         }
-    private val statuses = ConcurrentHashMap<MutationKey, MutableStateFlow<MutationStatus?>>()
+
+    private val statuses = LinkedHashMap<MutationKey, MutableStateFlow<MutationStatus?>>(INITIAL_STATUS_CAPACITY, LOAD_FACTOR, true)
+
     private val workers = ConcurrentHashMap<MutationKey, KeyWorker>()
+    private val workersMutex = Mutex()
 
     /**
      * The current/most recent [MutationStatus] for [key], or `null` if nothing has ever been
-     * enqueued under it. Keeps emitting past a terminal [MutationStatus.Succeeded]/[MutationStatus.Failed]
-     * until a new mutation is enqueued for the same key.
+     * enqueued under it or if it was cancelled via [cancel]. Keeps emitting past a terminal
+     * [MutationStatus.Succeeded]/[MutationStatus.Failed] until evicted or superseded by a new mutation.
      */
     public fun statusFlow(key: MutationKey): StateFlow<MutationStatus?> = statusFlowFor(key).asStateFlow()
+
+    /**
+     * Cancels any pending or in-flight mutation for [key].
+     *
+     * If a mutation is currently retrying or executing, it is cancelled. The persisted record
+     * (if any) is removed from [store], and [statusFlow] for [key] transitions to `null`.
+     *
+     * Reporting `null` indicates that the queue is idle for this key without introducing a
+     * new [MutationStatus] subclass that would break consumers with exhaustive `when` expressions.
+     */
+    public suspend fun cancel(key: MutationKey) {
+        workersMutex.withLock {
+            workers.remove(key)?.cancel()
+            synchronized(statuses) { statuses.remove(key)?.value = null }
+        }
+    }
 
     /**
      * Enqueues a mutation and returns immediately; [endpoint] (with [body], described by
@@ -107,7 +138,9 @@ public class MutationQueue(
             }
         record?.let { store.save(it) }
 
-        workerFor(key).submit(Enqueued(mutation, record, retryPolicy ?: defaultRetryPolicy))
+        workersMutex.withLock {
+            workerFor(key).submit(Enqueued(mutation, record, retryPolicy ?: defaultRetryPolicy))
+        }
         return MutationHandle(id, key)
     }
 
@@ -160,10 +193,56 @@ public class MutationQueue(
         // to restore it and then clean up its predecessors.
         records.filterNot { it === record }.forEach { store.remove(it.id) }
         val mutation = QueuedMutation(record.id, key, decoded.endpoint, decoded.body, decoded.bodyType)
-        workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
+        workersMutex.withLock {
+            workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
+        }
     }
 
-    private fun statusFlowFor(key: MutationKey): MutableStateFlow<MutationStatus?> = statuses.getOrPut(key) { MutableStateFlow(null) }
+    private fun statusFlowFor(key: MutationKey): MutableStateFlow<MutationStatus?> =
+        synchronized(statuses) {
+            val flow = statuses.getOrPut(key) { MutableStateFlow(null) }
+            trimStatuses(except = key)
+            flow
+        }
 
-    private fun workerFor(key: MutationKey): KeyWorker = workers.getOrPut(key) { KeyWorker(apiClient, store, statusFlowFor(key), scope) }
+    /** Retain active workers' flows so observers can always find the status being updated. */
+    private fun trimStatuses(except: MutationKey? = null) {
+        val iterator = statuses.entries.iterator()
+        while (statuses.size > maxStatuses && iterator.hasNext()) {
+            val key = iterator.next().key
+            if (key != except && !workers.containsKey(key)) iterator.remove()
+        }
+    }
+
+    private fun workerFor(key: MutationKey): KeyWorker =
+        workers.getOrPut(key) {
+            KeyWorker(apiClient, store, statusFlowFor(key), scope) { finishedWorker ->
+                workersMutex.withLock {
+                    if (finishedWorker.isIdle()) workers.remove(key, finishedWorker)
+                    synchronized(statuses) { trimStatuses() }
+                }
+            }
+        }
+
+    private companion object {
+        private const val INITIAL_STATUS_CAPACITY = 16
+        private const val LOAD_FACTOR = 0.75f
+    }
+
+    /** Binary-compatibility shim for callers compiled before [maxStatuses] was introduced. */
+    @Deprecated("Binary-compatibility shim; use primary constructor with maxStatuses.", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        apiClient: ApiClient,
+        scope: CoroutineScope,
+        store: MutationStore = InMemoryMutationStore(),
+        defaultRetryPolicy: RetryPolicy = DefaultRetryPolicy(retryNonIdempotent = true),
+        codecs: List<MutationCodec<*>> = emptyList(),
+    ) : this(
+        apiClient = apiClient,
+        scope = scope,
+        store = store,
+        defaultRetryPolicy = defaultRetryPolicy,
+        maxStatuses = 64,
+        codecs = codecs,
+    )
 }

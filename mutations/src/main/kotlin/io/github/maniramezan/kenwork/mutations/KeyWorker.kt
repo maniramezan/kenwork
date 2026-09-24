@@ -6,11 +6,16 @@ import io.github.maniramezan.kenwork.network.RetryPolicy
 import io.ktor.util.reflect.typeInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** One coalesced mutation, bundled with its persistence record (if any) and effective retry policy. */
@@ -31,13 +36,18 @@ internal class KeyWorker(
     private val store: MutationStore,
     private val statusFlow: MutableStateFlow<MutationStatus?>,
     private val scope: CoroutineScope,
+    private val onFinished: suspend (KeyWorker) -> Unit = {},
 ) {
     private val latest = MutableStateFlow<Enqueued<*>?>(null)
     private val stateMutex = Mutex()
     private var workerRunning = false
+    private var workerJob: Job? = null
 
     /** Whether the mutation with [mutationId] is the one this worker is currently driving. */
     fun isTracking(mutationId: String): Boolean = latest.value?.mutation?.id == mutationId
+
+    /** True after the loop has released this worker and no newer mutation has been submitted. */
+    suspend fun isIdle(): Boolean = stateMutex.withLock { !workerRunning && latest.value == null }
 
     suspend fun submit(enqueued: Enqueued<*>) {
         var superseded: Enqueued<*>? = null
@@ -58,28 +68,61 @@ internal class KeyWorker(
             store.remove(staleRecord.id)
         }
         if (startWorker) {
-            scope.launch { runLoop() }
+            val job = scope.launch(start = CoroutineStart.LAZY) { runLoop() }
+            workerJob = job
+            job.start()
         }
     }
 
+    /**
+     * Cancels any pending or in-progress mutation for this key.
+     * The persisted record (if any) is removed from [store], and [statusFlow] is reset to `null`.
+     */
+    suspend fun cancel() {
+        val record: MutationRecord?
+        stateMutex.withLock {
+            record = latest.value?.record
+            latest.value = null
+            statusFlow.value = null
+            workerRunning = false
+            workerJob?.cancel()
+        }
+        record?.let { store.remove(it.id) }
+    }
+
     private suspend fun runLoop() {
-        while (true) {
-            val current = latest.value ?: return
-            processOne(current)
-            val finished =
+        try {
+            while (true) {
+                val current = latest.value ?: return
+                processOne(current)
+                val finished =
+                    stateMutex.withLock {
+                        if (latest.value === current) {
+                            latest.value = null
+                            workerRunning = false
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                if (finished) {
+                    return
+                }
+                // A newer mutation replaced `current` while we were working it; loop picks it up.
+            }
+        } finally {
+            // Cancellation can leave the coroutine inactive, so cleanup must run in a context
+            // that is allowed to acquire the mutex and notify the queue.
+            val completedJob = currentCoroutineContext()[Job]
+            withContext(NonCancellable) {
                 stateMutex.withLock {
-                    if (latest.value === current) {
-                        latest.value = null
+                    if (workerJob === completedJob) {
                         workerRunning = false
-                        true
-                    } else {
-                        false
+                        workerJob = null
                     }
                 }
-            if (finished) {
-                return
+                onFinished(this@KeyWorker)
             }
-            // A newer mutation replaced `current` while we were working it; loop picks it up.
         }
     }
 

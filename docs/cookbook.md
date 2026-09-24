@@ -208,7 +208,14 @@ queue.statusFlow(MutationKey.of("like", "video", 42)).collect { status ->
         MutationStatus.Succeeded, is MutationStatus.Retrying, MutationStatus.Pending, null -> Unit
     }
 }
+
+// Cancel pending or retrying work for a key, including its persisted record.
+queue.cancel(MutationKey.of("like", "video", 42))
 ```
+
+The queue retains the most recent statuses for up to 64 idle keys. Set `maxStatuses` on
+`MutationQueue` if the UI needs a different retention limit; observe a flow while its mutation is
+active to receive every status transition.
 
 **Coalescing.** Enqueueing under the same `MutationKey` while a mutation is still pending/retrying
 replaces it — including cancelling an in-progress retry backoff — so rapidly toggling like/unlike
