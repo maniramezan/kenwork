@@ -15,19 +15,21 @@ public class AndroidLibraryConventionPlugin : Plugin<Project> {
             configureAndroidLibrary(this)
         }
 
-        // The :testing module ships test utilities (no production logic of its own), so it is
-        // exempt from the coverage gate.
-        if (name != "testing") {
+        // :testing ships test utilities and :samples ships usage examples (no production logic of
+        // their own), so both are exempt from the coverage gate.
+        if (name != "testing" && name != "samples") {
             configureJacoco()
         }
 
+        // :samples is never published and should read like app code, so it skips explicit-api.
+        val isPublished = name != "samples"
         tasks.withType(KotlinCompile::class.java).configureEach {
             val isTestCompilation = name.contains("UnitTest") || name.contains("AndroidTest")
             compilerOptions {
                 jvmTarget.set(JvmTarget.JVM_17)
                 // Public API of a published library must be explicit (visibility + return types),
                 // but tests are not published, so don't burden them with explicit-api.
-                if (!isTestCompilation) {
+                if (isPublished && !isTestCompilation) {
                     freeCompilerArgs.add("-Xexplicit-api=strict")
                 }
             }
