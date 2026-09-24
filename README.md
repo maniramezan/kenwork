@@ -17,13 +17,13 @@ free (plain constructors + a `Configuration` object).
 | `io.github.maniramezan.kenwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `FileSystemCache`, `LayeredCache`, `CachePolicy`, `CacheKey`, `CacheChange` |
 | `io.github.maniramezan.kenwork:repository` | `Repository`/`GenericRepository` (with `fetch` + reactive `stream`), `LocalDataSource`/`CacheBasedLocalDataSource` |
 | `io.github.maniramezan.kenwork:mutations` | `MutationQueue`, coalescing, retry, observable status, and a pluggable `MutationStore` (in-memory by default) |
-| `io.github.maniramezan.kenwork:testing` | `MockEngine` client builder, fakes (`FakeAuthorizationProvider`, `FakeReachabilityGate`), `RecordingRetryPolicy`, recording listener for consumer tests |
+| `io.github.maniramezan.kenwork:testing` | `MockEngine` client builder, fakes (`FakeApiClient`, `FakeAuthorizationProvider`, `FakeReachabilityGate`), `RecordingRetryPolicy`, `RecordingNetworkEventListener`, `RecordingLogSink`/`withRecordedLogs` for consumer tests |
 
 ## Install
 
 ```kotlin
 dependencies {
-    val kenworkVersion = "0.5.1"
+    val kenworkVersion = "0.5.2" // x-release-please-version
     implementation("io.github.maniramezan.kenwork:network-core:$kenworkVersion") // KMP
     implementation("io.github.maniramezan.kenwork:network:$kenworkVersion")
     implementation("io.github.maniramezan.kenwork:cache:$kenworkVersion")        // optional
@@ -99,15 +99,28 @@ A `401` automatically triggers a single coalesced token refresh and one retry.
 - `NetworkMonitor` connectivity (`StateFlow`), OkHttp `SslPinningConfiguration`, `KenworkLogger`,
   and a `NetworkEventListener` telemetry hook (with per-attempt retry events).
 
+## Samples
+
+[`samples/`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples) is a small,
+test-verified "videos" feature built on every module, meant to be read top to bottom:
+
+1. [`VideoApi.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/VideoApi.kt) — endpoints and DTOs.
+2. [`AuthenticatedClient.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/AuthenticatedClient.kt) — OAuth refresh, retry, reachability, and telemetry configuration.
+3. [`VideoRepository.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/VideoRepository.kt) — memory + disk `LayeredCache` behind a `GenericRepository` with reactive reads.
+4. [`LikeController.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/LikeController.kt) — optimistic likes through a persisted, coalescing `MutationQueue`.
+
+The [sample tests](samples/src/test/kotlin/io/github/maniramezan/kenwork/samples) run each flow
+with the `:testing` fakes, so the samples can't drift from the API. The module is not published.
+
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — layering & concurrency model.
+- [AGENTS.md](AGENTS.md) — contributor and AI-agent guide: build commands, conventions, and API-compatibility rules.
 - [docs/cookbook.md](docs/cookbook.md) — task-oriented recipes.
 - [docs/platforms.md](docs/platforms.md) — platform support, shared code, and client ownership.
 - [docs/security.md](docs/security.md) — credentials, logging, persistence, and retry boundaries.
 - [docs/graphql.md](docs/graphql.md) — GraphQL transport and application-error handling.
 - [docs/parity.md](docs/parity.md) — SwiftyNetwork ↔ kenwork mapping.
-- [MIGRATION.md](MIGRATION.md) — moving an existing Ktor/auth layer onto kenwork.
 - [docs/release.md](docs/release.md) — how releases reach Maven Central.
 - API reference (Dokka): published to GitHub Pages on pushes to `main`.
 

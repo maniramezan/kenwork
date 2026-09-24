@@ -3,6 +3,7 @@ package io.github.maniramezan.kenwork.cache
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class InMemoryCacheTest {
@@ -68,5 +69,19 @@ class InMemoryCacheTest {
             cache.removeAll()
             assertEquals(0, cache.count())
             assertNull(cache.value(CacheKey("k")))
+        }
+
+    @Test
+    fun `rejects a negative maxSize`() {
+        assertFailsWith<IllegalArgumentException> { InMemoryCache<String>(maxSize = -1) }
+    }
+
+    @Test
+    fun `a zero maxSize retains nothing`() =
+        runTest {
+            val cache = InMemoryCache<String>(maxSize = 0)
+            cache.setValue("v", CacheKey("k"))
+            assertNull(cache.value(CacheKey("k")))
+            assertEquals(0, cache.count())
         }
 }

@@ -8,8 +8,6 @@ complexity:
     functionThreshold: 8
     constructorThreshold: 12
     ignoreDefaultParameters: true
-  ReturnCount:
-    active: false
   TooManyFunctions:
     active: false
 
@@ -19,6 +17,9 @@ exceptions:
     active: false
 
 style:
+  # ReturnCount belongs to the `style` rule set; guard clauses are preferred over nesting here.
+  ReturnCount:
+    active: false
   MagicNumber:
     ignorePropertyDeclaration: true
     ignoreCompanionObjectPropertyDeclaration: true

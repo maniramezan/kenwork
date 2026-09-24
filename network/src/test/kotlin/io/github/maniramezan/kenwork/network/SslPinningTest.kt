@@ -2,6 +2,7 @@ package io.github.maniramezan.kenwork.network
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -33,5 +34,18 @@ class SslPinningTest {
                 ),
             )
         assertNotNull(config.toCertificatePinner())
+    }
+
+    @Test
+    fun `rejects a host policy with no pins`() {
+        assertFailsWith<IllegalArgumentException> { SslPinningConfiguration.HostPolicy(pins = emptySet()) }
+        assertFailsWith<IllegalArgumentException> {
+            SslPinningConfiguration.pinning(pinnedHosts = mapOf("api.test" to emptySet()))
+        }
+    }
+
+    @Test
+    fun `rejects a blank pin`() {
+        assertFailsWith<IllegalArgumentException> { SslPinningConfiguration.Pin.publicKeySha256(" ") }
     }
 }

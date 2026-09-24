@@ -1,24 +1,15 @@
 package io.github.maniramezan.kenwork.network
 
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.header
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
-import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.readRawBytes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.takeFrom
-import io.ktor.serialization.kotlinx.json.json
 import io.ktor.util.reflect.TypeInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -27,13 +18,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.net.ConnectException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import io.ktor.client.plugins.logging.LogLevel as KtorLogLevel
-import io.ktor.client.plugins.logging.Logger as KtorLogger
 import io.ktor.http.HttpMethod as KtorHttpMethod
 
 /**
@@ -49,6 +33,10 @@ import io.ktor.http.HttpMethod as KtorHttpMethod
  *
  * Thread-safe: the mutable configuration/client pair is guarded by a [Mutex], and the active
  * client is reference-counted so [updateConfiguration] never closes a client mid-request.
+ *
+ * This class owns orchestration only (lifecycle, retry, auth). Engine construction lives in
+ * `HttpClientFactory.kt`, response validation/decoding and exception mapping in
+ * `ResponseHandling.kt`, and telemetry event construction in `NetworkTelemetry.kt`.
  */
 public class NetworkClient(
     configuration: NetworkClientConfiguration = NetworkClientConfiguration(),
@@ -62,7 +50,7 @@ public class NetworkClient(
 
     private val mutex = Mutex()
     private var configuration: NetworkClientConfiguration = configuration
-    private var holder: ClientHolder = ClientHolder(buildClient(configuration))
+    private var holder: ClientHolder = ClientHolder(buildHttpClient(configuration))
     private var closed: Boolean = false
 
     /**
@@ -74,7 +62,7 @@ public class NetworkClient(
         val toClose =
             mutex.withLock {
                 check(!closed) { "NetworkClient is closed" }
-                val replacement = ClientHolder(buildClient(newConfiguration))
+                val replacement = ClientHolder(buildHttpClient(newConfiguration))
                 val previous = holder
                 configuration = newConfiguration
                 holder = replacement
@@ -141,22 +129,12 @@ public class NetworkClient(
                             validateOrThrow(response)
                         }
                     val decoded = decodeBody(validated, responseType)
-                    config.eventListener?.onEvent(
-                        NetworkEvent(
-                            endpointId = endpoint.endpointId(),
-                            method = endpoint.method.value,
-                            durationMs = elapsedMs(startNs),
-                            statusCode = validated.status.value,
-                            attempt = attempt,
-                        ),
-                    )
+                    config.eventListener?.onEvent(successEvent(endpoint, validated.status.value, elapsedMs(startNs), attempt))
                     return decoded
                 } catch (error: CancellationException) {
                     throw error
-                } catch (error: NetworkError) {
-                    error
                 } catch (error: Throwable) {
-                    mapException(error)
+                    error.toNetworkError()
                 }
             val delayMillis = config.retryPolicy.retryDelayMillis(attempt + 1, endpoint.method, mapped)
             config.eventListener?.onEvent(
@@ -218,7 +196,7 @@ public class NetworkClient(
             if (!usesProviderAuthorization || provider == null || authAttempt >= config.maxAuthRefreshAttempts) return response
 
             // Discard the 401 body so the connection is released before we retry.
-            runCatching { response.readRawBytes() }
+            response.drainBody()
             if (!provider.refreshAuthorizationIfNeeded()) throw NetworkError.AuthorizationRefreshFailed
             authAttempt++
             if (config.retryDelayMillis > 0) delay(config.retryDelayMillis)
@@ -257,174 +235,21 @@ public class NetworkClient(
                     }
                     setBody(body, bodyType)
                 }
-                endpoint.body != null -> setBody(endpoint.body!!)
+                // Without its TypeInfo a typed body can't be serialized; sending the request
+                // without it would silently drop the payload, so fail loudly instead.
+                body != null -> throw NetworkError.EncodingFailed(
+                    IllegalArgumentException("A request body of type ${body::class.simpleName} was passed without its bodyType"),
+                )
+                else -> endpoint.body?.let { setBody(it) }
             }
         }
-
-    private suspend fun validateOrThrow(response: HttpResponse): HttpResponse {
-        val code = response.status.value
-        if (code in HTTP_OK..HTTP_LAST_SUCCESS) return response
-        val bytes = runCatching { response.readRawBytes() }.getOrNull()
-        throw when (code) {
-            HTTP_UNAUTHORIZED -> NetworkError.Unauthorized
-            HTTP_FORBIDDEN -> NetworkError.Forbidden
-            HTTP_NOT_FOUND -> NetworkError.NotFound
-            else -> NetworkError.ServerError(code, bytes, parseRetryAfter(response))
-        }
-    }
-
-    /** Parses a `Retry-After` header (delta-seconds or an HTTP date) into a non-negative delay. */
-    private fun parseRetryAfter(response: HttpResponse): Long? {
-        val raw = response.headers[HttpHeaders.RetryAfter]?.trim() ?: return null
-        val seconds = raw.toLongOrNull()
-        return if (seconds != null) {
-            when {
-                seconds <= 0 -> 0
-                seconds > Long.MAX_VALUE / MILLIS_PER_SECOND -> Long.MAX_VALUE
-                else -> seconds * MILLIS_PER_SECOND
-            }
-        } else {
-            runCatching {
-                val target = ZonedDateTime.parse(raw, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
-                (target - System.currentTimeMillis()).coerceAtLeast(0)
-            }.getOrNull()
-        }
-    }
-
-    private suspend fun decodeBody(
-        response: HttpResponse,
-        responseType: TypeInfo,
-    ): Any? {
-        if (responseType.type == Unit::class) {
-            runCatching { response.readRawBytes() }
-            return Unit
-        }
-        return try {
-            response.call.body(responseType)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Throwable) {
-            throw NetworkError.DecodingFailed(error)
-        }
-    }
-
-    private fun mapException(error: Throwable): NetworkError =
-        when (error) {
-            is HttpRequestTimeoutException, is SocketTimeoutException -> NetworkError.Timeout
-            is UnknownHostException, is ConnectException -> NetworkError.NoInternetConnection
-            else -> NetworkError.Underlying(error)
-        }
-
-    private fun buildClient(config: NetworkClientConfiguration): HttpClient {
-        val common: io.ktor.client.HttpClientConfig<*>.() -> Unit = {
-            expectSuccess = false
-            install(ContentNegotiation) { json(config.json) }
-            install(HttpTimeout) { requestTimeoutMillis = config.timeoutMillis }
-            install(Logging) {
-                level = config.logLevel.toKtorLogLevel()
-                logger =
-                    object : KtorLogger {
-                        override fun log(message: String) {
-                            KenworkLogger.debug(message, LogCategory.NETWORK)
-                        }
-                    }
-            }
-        }
-        val explicitEngine = config.engine
-        return if (explicitEngine != null) {
-            HttpClient(explicitEngine, common)
-        } else {
-            HttpClient(OkHttp) {
-                common()
-                engine {
-                    config.engineInterceptors.forEach { addInterceptor(it) }
-                    config {
-                        config.okHttpCache?.let { cache(it) }
-                        config.sslPinning?.let { certificatePinner(it.toCertificatePinner()) }
-                        config.okHttpConfig?.invoke(this)
-                    }
-                }
-            }
-        }
-    }
 
     public companion object {
         /** A process-wide default client. Mirrors SwiftyNetwork's `NetworkClient.shared`. */
         public val shared: NetworkClient by lazy { NetworkClient() }
 
-        private const val HTTP_OK = 200
-        private const val HTTP_LAST_SUCCESS = 299
-        private const val HTTP_UNAUTHORIZED = 401
-        private const val HTTP_FORBIDDEN = 403
-        private const val HTTP_NOT_FOUND = 404
         private const val NANOS_PER_MILLI = 1_000_000L
-        private const val MILLIS_PER_SECOND = 1_000L
     }
 
     private fun elapsedMs(startNs: Long): Long = ((System.nanoTime() - startNs) / NANOS_PER_MILLI).coerceAtLeast(0L)
-}
-
-private fun LogLevel.toKtorLogLevel(): KtorLogLevel =
-    when (this) {
-        LogLevel.OFF -> KtorLogLevel.NONE
-        LogLevel.ERROR, LogLevel.WARNING, LogLevel.INFO -> KtorLogLevel.INFO
-        LogLevel.DEBUG -> KtorLogLevel.BODY
-    }
-
-private fun NetworkError.toEvent(
-    endpoint: NetworkEndpoint,
-    durationMs: Long,
-    attempt: Int,
-    isFinalAttempt: Boolean,
-): NetworkEvent {
-    val statusCode =
-        when (this) {
-            NetworkError.Unauthorized -> 401
-            NetworkError.Forbidden -> 403
-            NetworkError.NotFound -> 404
-            is NetworkError.ServerError -> statusCode
-            else -> null
-        }
-    // A coarse, RetryPolicy-agnostic classification of "does this look like a transient failure"
-    // for telemetry — mirrors the status codes DefaultRetryPolicy treats as retryable (429 + 5xx)
-    // plus timeouts/connectivity loss. It intentionally does not reflect a *specific* configured
-    // RetryPolicy's exhaustion state (maxRetries) or custom `isRetryableStatus`, since those answer
-    // "was this attempt retried", not "is this class of failure retryable in general".
-    val retryable =
-        this is NetworkError.Timeout ||
-            this is NetworkError.NoInternetConnection ||
-            (
-                this is NetworkError.ServerError &&
-                    statusCode != null &&
-                    (statusCode == HTTP_TOO_MANY_REQUESTS || statusCode >= HTTP_SERVER_ERROR)
-            )
-    return NetworkEvent(
-        endpointId = endpoint.endpointId(),
-        method = endpoint.method.value,
-        durationMs = durationMs,
-        statusCode = statusCode,
-        errorType = this::class.simpleName,
-        isRetryable = retryable,
-        attempt = attempt,
-        isFinalAttempt = isFinalAttempt,
-    )
-}
-
-private val UUID_REGEX =
-    Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
-
-private const val HTTP_TOO_MANY_REQUESTS = 429
-private const val HTTP_SERVER_ERROR = 500
-
-/** A low-cardinality identifier for telemetry: path with numeric/uuid segments normalized. */
-internal fun NetworkEndpoint.endpointId(): String {
-    val segments = path.trim('/').split('/').filter { it.isNotBlank() }
-    if (segments.isEmpty()) return "root"
-    return segments.joinToString("/") { segment ->
-        when {
-            segment.all { it.isDigit() } -> ":id"
-            UUID_REGEX.matches(segment.lowercase()) -> ":uuid"
-            else -> segment
-        }
-    }
 }

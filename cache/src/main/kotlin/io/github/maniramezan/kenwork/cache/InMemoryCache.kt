@@ -18,7 +18,7 @@ import kotlinx.coroutines.sync.withLock
  * Mutations are published to [changes] so reactive consumers can observe the cache; reads (which
  * only reorder for LRU) do not emit.
  *
- * @param maxSize maximum number of entries to retain, or `null` for unbounded.
+ * @param maxSize maximum number of entries to retain, or `null` for unbounded. Must not be negative.
  * @param currentTimeMillis time source, injectable for deterministic tests.
  */
 public class InMemoryCache<V : Any>(
@@ -29,6 +29,10 @@ public class InMemoryCache<V : Any>(
         val value: V,
         val timestamp: Long,
     )
+
+    init {
+        require(maxSize == null || maxSize >= 0) { "maxSize must be non-negative (or null for unbounded)" }
+    }
 
     private val mutex = Mutex()
     private val storage = LinkedHashMap<CacheKey, Entry<V>>(INITIAL_CAPACITY, LOAD_FACTOR, true)

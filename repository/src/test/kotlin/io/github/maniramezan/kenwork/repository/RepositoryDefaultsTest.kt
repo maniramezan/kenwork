@@ -8,12 +8,18 @@ import io.github.maniramezan.kenwork.network.HttpMethod
 import io.github.maniramezan.kenwork.network.NetworkDataSource
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
 import io.ktor.util.reflect.TypeInfo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private data class DefaultsItem(
     val value: String,
@@ -132,5 +138,29 @@ class RepositoryDefaultsTest {
             local.write(DefaultsItem("v2"), key)
             local.removeAll()
             assertNull(local.read(key))
+        }
+
+    @Test
+    fun `a failed load does not cancel a supplied scope`() =
+        runTest {
+            val parent = CoroutineScope(Job())
+            val failing =
+                object : NetworkDataSource {
+                    override suspend fun <T> request(
+                        endpoint: NetworkEndpoint,
+                        body: Any?,
+                        bodyType: TypeInfo?,
+                        responseType: TypeInfo,
+                    ): T = error("boom")
+                }
+            val repository = GenericRepository<DefaultsItem>(failing, MapLocalDataSource(), scope = parent)
+            try {
+                assertFailsWith<IllegalStateException> { repository.fetch(endpoint, key, CachePolicy.ReloadIgnoringCache) }
+                assertTrue(parent.isActive, "the caller's scope must survive a failed load")
+                // And the repository keeps working for later loads on the same scope.
+                assertFailsWith<IllegalStateException> { repository.fetch(endpoint, key, CachePolicy.ReloadIgnoringCache) }
+            } finally {
+                parent.cancel()
+            }
         }
 }

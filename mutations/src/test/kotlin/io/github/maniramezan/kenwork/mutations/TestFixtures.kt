@@ -83,7 +83,7 @@ internal object SetLikeStateCodec : MutationCodec<LikeBody> {
 
     override fun decode(payload: String): DecodedMutation<LikeBody> {
         val decoded = Json.decodeFromString(Payload.serializer(), payload)
-        return DecodedMutation(SetLikeState(decoded.videoId), LikeBody(decoded.liked), null)
+        return DecodedMutation(SetLikeState(decoded.videoId), LikeBody(decoded.liked))
     }
 
     @Serializable

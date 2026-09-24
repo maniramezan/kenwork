@@ -10,6 +10,7 @@ import kotlinx.coroutines.yield
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OAuthAuthorizationProviderTest {
@@ -84,5 +85,35 @@ class OAuthAuthorizationProviderTest {
             assertEquals(1, handlerCalls.get())
             assertTrue(results.all { it })
             assertEquals(AuthorizationType.Bearer("new"), provider.currentAuthorization())
+        }
+
+    @Test
+    fun `refresh after close reports false without calling the handler`() =
+        runTest {
+            val calls = AtomicInteger()
+            val provider =
+                OAuthAuthorizationProvider("old") {
+                    calls.incrementAndGet()
+                    "new"
+                }
+            provider.close()
+            assertFalse(provider.refreshAuthorizationIfNeeded())
+            assertEquals(0, calls.get())
+            assertEquals("old", provider.currentAccessToken())
+        }
+
+    @Test
+    fun `closing mid-refresh fails the waiting caller instead of cancelling it`() =
+        runTest {
+            val entered = CompletableDeferred<Unit>()
+            val provider =
+                OAuthAuthorizationProvider("old") {
+                    entered.complete(Unit)
+                    CompletableDeferred<String>().await() // never completes on its own
+                }
+            val waiter = async { provider.refreshAuthorizationIfNeeded() }
+            entered.await()
+            provider.close()
+            assertFalse(waiter.await())
         }
 }

@@ -14,7 +14,8 @@ diagnostic strings. Base64 Basic credentials are encoding, not encryption.
 `network-core` disables redirects by default. When enabling redirects or using `NetworkClient`,
 review the actual engine's handling of custom credential headers and destination changes.
 `SslPinningConfiguration` applies only to the built-in OkHttp path; an explicit engine owns its
-TLS configuration. The `okHttpConfig` hook can override builder settings, so it is trusted code.
+TLS configuration. It rejects a host with no pins (which would otherwise leave that host silently
+unpinned) and blank pins. The `okHttpConfig` hook can override builder settings, so it is trusted code.
 
 ## Logging and telemetry
 
@@ -38,7 +39,9 @@ authorization context whenever the returned data differs.
 Mutation persistence requires both a codec and a durable `MutationStore`; the default store is
 in-memory. Avoid persisting bearer tokens in records; resolve current authorization at execution.
 Coordinate sign-out with the queue's scope and store so old-account work cannot run with a new
-account's credentials.
+account's credentials. Call `OAuthAuthorizationProvider.close()` on sign-out: any in-flight and
+later refreshes then report failure, so requests fail with `AuthorizationRefreshFailed` instead of
+minting a token for the signed-out account.
 
 Transient retries exclude POST/PATCH by default, while the mutation queue explicitly opts into
 non-idempotent retry. Use server-side idempotency keys or operations that safely set a desired

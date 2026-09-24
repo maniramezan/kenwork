@@ -21,10 +21,12 @@ public class FakeAuthorizationProvider(
     private val mutex = Mutex()
 
     /** The token currently handed out. */
+    @Volatile
     public var currentToken: String? = initialToken
         private set
 
     /** How many times [refreshAuthorizationIfNeeded] has been invoked. */
+    @Volatile
     public var refreshCount: Int = 0
         private set
 

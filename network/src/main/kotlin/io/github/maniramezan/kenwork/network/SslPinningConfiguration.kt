@@ -14,16 +14,33 @@ import okhttp3.CertificatePinner
 public class SslPinningConfiguration(
     public val policies: Map<String, HostPolicy>,
 ) {
-    /** A pinning policy for a single host. */
+    /**
+     * A pinning policy for a single host.
+     *
+     * @throws IllegalArgumentException if [pins] is empty — an empty set would silently leave the
+     *   host unpinned. Always ship at least the current key plus a backup key.
+     */
     public data class HostPolicy(
         public val pins: Set<Pin>,
         public val includesSubdomains: Boolean = false,
-    )
+    ) {
+        init {
+            require(pins.isNotEmpty()) { "A pinned host needs at least one pin (current + backup recommended)" }
+        }
+    }
 
-    /** A single SPKI SHA-256 pin (base64). */
+    /**
+     * A single SPKI SHA-256 pin (base64).
+     *
+     * @throws IllegalArgumentException if [sha256PublicKeyBase64] is blank.
+     */
     public data class Pin(
         public val sha256PublicKeyBase64: String,
     ) {
+        init {
+            require(sha256PublicKeyBase64.isNotBlank()) { "A pin must be a non-blank base64 SPKI SHA-256 hash" }
+        }
+
         public companion object {
             /** Builds a public-key pin from a base64-encoded SPKI SHA-256 hash. */
             public fun publicKeySha256(base64: String): Pin = Pin(base64)

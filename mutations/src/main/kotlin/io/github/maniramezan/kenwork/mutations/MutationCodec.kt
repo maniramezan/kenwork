@@ -2,17 +2,28 @@ package io.github.maniramezan.kenwork.mutations
 
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
 import io.ktor.util.reflect.TypeInfo
+import io.ktor.util.reflect.typeInfo
 
 /**
  * The endpoint + body pair a [MutationCodec] reconstructs from a persisted payload. Distinct from
  * [QueuedMutation] because it carries no [MutationRecord.id]/[MutationRecord.key] — those live on
  * the record itself and are reattached by [MutationQueue] after decoding.
+ *
+ * [bodyType] must describe [body] whenever [body] is non-null: it is what the client serializes the
+ * body with, and a client refuses to send a typed body without it. Prefer the reified
+ * `DecodedMutation(endpoint, body)` factory, which fills it in for you.
  */
 public class DecodedMutation<B : Any>(
     public val endpoint: NetworkEndpoint,
     public val body: B?,
     public val bodyType: TypeInfo?,
 )
+
+/** Builds a [DecodedMutation], capturing [body]'s [TypeInfo] (or none when [body] is `null`). */
+public inline fun <reified B : Any> DecodedMutation(
+    endpoint: NetworkEndpoint,
+    body: B?,
+): DecodedMutation<B> = DecodedMutation(endpoint, body, if (body == null) null else typeInfo<B>())
 
 /**
  * Bridges a specific mutation shape (one [NetworkEndpoint] implementation + body type) to and
@@ -25,14 +36,16 @@ public class DecodedMutation<B : Any>(
  * to survive process death, e.g.:
  *
  * ```kotlin
- * object LikeVideoCodec : MutationCodec<Unit> {
- *     override val id = "like-video"
- *     override fun encode(endpoint: NetworkEndpoint, body: Unit?): String =
- *         Json.encodeToString(LikeVideoPayload((endpoint as LikeVideo).videoId))
- *     override fun decode(payload: String): DecodedMutation<Unit> {
- *         val decoded = Json.decodeFromString<LikeVideoPayload>(payload)
- *         return DecodedMutation(LikeVideo(decoded.videoId), null, null)
+ * object SetLikeStateCodec : MutationCodec<LikeBody> {
+ *     override val id = "set-like-state"
+ *     override fun encode(endpoint: NetworkEndpoint, body: LikeBody?): String =
+ *         Json.encodeToString(Payload((endpoint as SetLikeState).videoId, body?.liked ?: false))
+ *     override fun decode(payload: String): DecodedMutation<LikeBody> {
+ *         val decoded = Json.decodeFromString<Payload>(payload)
+ *         // The reified factory records LikeBody's TypeInfo so the body is serialized on replay.
+ *         return DecodedMutation(SetLikeState(decoded.videoId), LikeBody(decoded.liked))
  *     }
+ *     @Serializable private data class Payload(val videoId: Int, val liked: Boolean)
  * }
  * ```
  *
