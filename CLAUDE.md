@@ -2,7 +2,8 @@
 
 ## Claude Code specifics
 
-Project skills live in `.claude/skills/`; invoke them when the task matches:
+Project skills live in `.agents/skills/`, with links in `.claude/skills/` for Claude Code discovery.
+Invoke them when the task matches:
 
 - `evolve-public-api`: any change to a public or protected declaration in a published module.
 - `add-module`: creating a new Gradle module.

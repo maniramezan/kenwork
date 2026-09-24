@@ -26,6 +26,11 @@ Key docs: `ARCHITECTURE.md` (design and concurrency), `docs/cookbook.md` (recipe
 `docs/security.md` (credential/logging/persistence rules), `docs/platforms.md` (KMP boundary),
 `docs/parity.md` (SwiftyNetwork mapping), `MIGRATION.md` (upgrade notes), `docs/release.md`.
 
+Repository skills for all AI agents live in `.agents/skills/`. Read the matching `SKILL.md` when
+working on a public API (`evolve-public-api`), adding a module (`add-module`), or verifying changes
+(`verify-changes`). Edit skills there; `.claude/skills/` contains links to those same files for
+Claude Code discovery.
+
 ## Build and verify
 
 Requirements: JDK 21 (the Gradle daemon is pinned via `gradle/gradle-daemon-jvm.properties`) and an
