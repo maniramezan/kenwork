@@ -2,24 +2,15 @@ package io.github.maniramezan.kenwork.mutations
 
 import io.github.maniramezan.kenwork.network.ApiClient
 import io.github.maniramezan.kenwork.network.DefaultRetryPolicy
+import io.github.maniramezan.kenwork.network.KenworkLogger
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
-import io.github.maniramezan.kenwork.network.NetworkError
 import io.github.maniramezan.kenwork.network.RetryPolicy
 import io.ktor.util.reflect.TypeInfo
-import io.ktor.util.reflect.typeInfo
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -134,166 +125,45 @@ public class MutationQueue(
             .loadAll()
             .groupBy(MutationRecord::key)
             .values
-            .forEach { records ->
-                val record = records.maxWith(compareBy(MutationRecord::enqueuedAtMillis).thenBy(MutationRecord::id))
+            .forEach { records -> restoreNewest(records) }
+    }
 
-                @Suppress("UNCHECKED_CAST")
-                val codec = codecsById[record.codecId] as? MutationCodec<Any> ?: return@forEach
-                val decoded = codec.decode(record.payload)
-                // Do not discard anything until the newest desired state is known to be
-                // recoverable. If its codec is unavailable (or decoding throws), a future app
-                // version must still be able to restore it and then clean up its predecessors.
-                records.filterNot { it === record }.forEach { store.remove(it.id) }
-                val key = MutationKey(record.key)
-                val mutation = QueuedMutation(record.id, key, decoded.endpoint, decoded.body, decoded.bodyType)
-                workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
+    /**
+     * Resubmits the newest of [records] (all sharing one key) and drops its predecessors. A record
+     * whose codec is missing or whose payload fails to decode is left in [store] untouched, and
+     * never prevents other keys from being restored.
+     */
+    private suspend fun restoreNewest(records: List<MutationRecord>) {
+        val record = records.maxWith(compareBy(MutationRecord::enqueuedAtMillis).thenBy(MutationRecord::id))
+        val key = MutationKey(record.key)
+        // Already executing in this process (e.g. restore() called twice): resubmitting would send
+        // it again, and coalescing it with itself would delete its own persisted record.
+        if (workers[key]?.isTracking(record.id) == true) return
+
+        @Suppress("UNCHECKED_CAST")
+        val codec = codecsById[record.codecId] as? MutationCodec<Any> ?: return
+        val decoded =
+            try {
+                codec.decode(record.payload)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                KenworkLogger.error(
+                    "Skipping persisted mutation ${record.id}: codec '${record.codecId}' failed to decode it",
+                    error,
+                    attributes = mapOf("kenwork.mutation.codec_id" to record.codecId),
+                )
+                return
             }
+        // Do not discard anything until the newest desired state is known to be recoverable. If
+        // its codec is unavailable (or decoding throws), a future app version must still be able
+        // to restore it and then clean up its predecessors.
+        records.filterNot { it === record }.forEach { store.remove(it.id) }
+        val mutation = QueuedMutation(record.id, key, decoded.endpoint, decoded.body, decoded.bodyType)
+        workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
     }
 
     private fun statusFlowFor(key: MutationKey): MutableStateFlow<MutationStatus?> = statuses.getOrPut(key) { MutableStateFlow(null) }
 
     private fun workerFor(key: MutationKey): KeyWorker = workers.getOrPut(key) { KeyWorker(apiClient, store, statusFlowFor(key), scope) }
-}
-
-/** One coalesced mutation, bundled with its persistence record (if any) and effective retry policy. */
-private class Enqueued<B : Any>(
-    val mutation: QueuedMutation<B>,
-    val record: MutationRecord?,
-    val retryPolicy: RetryPolicy,
-)
-
-/**
- * Executes (with retry + coalescing) every mutation submitted for a single [MutationKey]. Only one
- * of these runs at a time per key: [submit] atomically swaps in the latest desired mutation, and
- * the worker loop always converges on whatever was most recently submitted, cancelling any
- * in-progress retry backoff for a superseded mutation.
- */
-private class KeyWorker(
-    private val apiClient: ApiClient,
-    private val store: MutationStore,
-    private val statusFlow: MutableStateFlow<MutationStatus?>,
-    private val scope: CoroutineScope,
-) {
-    private val latest = MutableStateFlow<Enqueued<*>?>(null)
-    private val stateMutex = Mutex()
-    private var workerRunning = false
-
-    suspend fun submit(enqueued: Enqueued<*>) {
-        var superseded: Enqueued<*>? = null
-        var startWorker = false
-        stateMutex.withLock {
-            superseded = latest.value
-            latest.value = enqueued
-            statusFlow.value = MutationStatus.Pending
-            if (!workerRunning) {
-                workerRunning = true
-                startWorker = true
-            }
-        }
-        if (superseded != null && superseded !== enqueued) {
-            superseded.record?.let { store.remove(it.id) }
-        }
-        if (startWorker) {
-            scope.launch { runLoop() }
-        }
-    }
-
-    private suspend fun runLoop() {
-        while (true) {
-            val current = latest.value ?: return
-            processOne(current)
-            val finished =
-                stateMutex.withLock {
-                    if (latest.value === current) {
-                        latest.value = null
-                        workerRunning = false
-                        true
-                    } else {
-                        false
-                    }
-                }
-            if (finished) {
-                return
-            }
-            // A newer mutation replaced `current` while we were working it; loop picks it up.
-        }
-    }
-
-    // Each branch below is a guard clause for a distinct terminal/loop-continuation outcome
-    // (superseded, succeeded, gave up, or scheduled a retry) — splitting it up would obscure the
-    // state machine rather than clarify it.
-    @Suppress("ReturnCount", "NestedBlockDepth")
-    private suspend fun processOne(enqueued: Enqueued<*>) {
-        @Suppress("UNCHECKED_CAST")
-        val active = enqueued as Enqueued<Any>
-        var attempt = 0
-        while (true) {
-            if (latest.value !== enqueued) return
-
-            val failure = attemptOnce(active)
-            if (failure == null) {
-                val stillCurrent = updateStatusIfCurrent(enqueued, MutationStatus.Succeeded)
-                if (stillCurrent) active.record?.let { store.remove(it.id) }
-                return
-            }
-
-            val delayMillis = active.retryPolicy.retryDelayMillis(attempt + 1, active.mutation.endpoint.method, failure)
-            if (delayMillis == null) {
-                val stillCurrent = updateStatusIfCurrent(enqueued, MutationStatus.Failed(failure))
-                if (stillCurrent) active.record?.let { store.remove(it.id) }
-                return
-            }
-
-            attempt++
-            if (!updateStatusIfCurrent(enqueued, MutationStatus.Retrying(attempt, failure))) return
-            if (awaitDelayOrSupersede(delayMillis, enqueued)) return
-        }
-    }
-
-    private suspend fun updateStatusIfCurrent(
-        enqueued: Enqueued<*>,
-        status: MutationStatus,
-    ): Boolean =
-        stateMutex.withLock {
-            if (latest.value !== enqueued) return@withLock false
-            statusFlow.value = status
-            true
-        }
-
-    private suspend fun attemptOnce(active: Enqueued<Any>): NetworkError? =
-        try {
-            apiClient.request<Unit>(active.mutation.endpoint, active.mutation.body, active.mutation.bodyType, typeInfo<Unit>())
-            null
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: NetworkError) {
-            error
-        } catch (error: Throwable) {
-            NetworkError.Underlying(error)
-        }
-
-    /** Waits [delayMillis], or returns early (`true`) the instant [current] is superseded. */
-    private suspend fun awaitDelayOrSupersede(
-        delayMillis: Long,
-        current: Enqueued<*>,
-    ): Boolean {
-        if (latest.value !== current) return true
-        return coroutineScope {
-            val outcome = CompletableDeferred<Boolean>()
-            val watcher =
-                launch {
-                    latest.filter { it !== current }.first()
-                    outcome.complete(true)
-                }
-            val timer =
-                launch {
-                    delay(delayMillis)
-                    outcome.complete(false)
-                }
-            val superseded = outcome.await()
-            watcher.cancel()
-            timer.cancel()
-            superseded
-        }
-    }
 }

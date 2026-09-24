@@ -132,3 +132,30 @@ custom logic.
   offline.
 - `FileSystemCache` — a durable `PersistentCache` for `LayeredCache`'s persistent tier.
 - `Repository.stream(...)` and `Cache.changes()` for reactive, offline-first reads.
+
+## Upgrading kenwork: behavior changes after 0.5.2
+
+No source changes are required, but these fixes change runtime behavior:
+
+- **A typed request body now requires its `TypeInfo`.** Calling the type-erased
+  `ApiClient.request(endpoint, body, bodyType = null, …)` with a non-null `body` used to send the
+  request *without* the body. It now fails with `NetworkError.EncodingFailed` and sends nothing.
+  This mostly affects `MutationCodec.decode` implementations that returned
+  `DecodedMutation(endpoint, body, null)`: restored mutations were replayed without their body.
+  Use the new reified factory, which records the type for you:
+  `DecodedMutation(endpoint, body)`.
+- **Request serialization failures** now surface as `NetworkError.EncodingFailed` (previously
+  `NetworkError.Underlying`).
+- **`request<EmptyResponse>()` accepts bodyless responses** such as `204 No Content` instead of
+  failing with `DecodingFailed`.
+- **Telemetry `endpointId`** now normalizes UUIDs of every version (including time-ordered v7)
+  and of either case to `:uuid`. Dashboards keyed on the raw segment will see fewer, merged series.
+- **`GenericRepository` with a caller-supplied scope:** a failed load no longer cancels that scope.
+- **`OAuthAuthorizationProvider.close()`:** refreshes after (or during) `close()` now return
+  `false` instead of throwing `CancellationException` into non-cancelled callers.
+- **`MutationQueue.restore()`** skips (and keeps) a record whose codec fails to decode instead of
+  aborting the entire restore, and no longer resends or deletes a mutation that is already running.
+- **Fail-fast validation:** `InMemoryCache(maxSize < 0)` and `SslPinningConfiguration` hosts with
+  no pins (or blank pins) throw `IllegalArgumentException` at construction.
+- **`FileSystemCache.removeAll()`** also deletes temporary files orphaned by a process death during
+  a write. File names and on-disk format are unchanged.

@@ -50,7 +50,7 @@ public class DefaultRetryPolicy(
     public val retryNonIdempotent: Boolean = false,
     public val backoffBaseMillis: Long = DEFAULT_BACKOFF_BASE_MILLIS,
     public val backoffMaxMillis: Long = DEFAULT_BACKOFF_MAX_MILLIS,
-    public val isRetryableStatus: (Int) -> Boolean = { it == STATUS_TOO_MANY_REQUESTS || it >= STATUS_SERVER_ERROR },
+    public val isRetryableStatus: (Int) -> Boolean = HttpStatus::isDefaultRetryable,
     private val random: Random = Random.Default,
 ) : RetryPolicy {
     init {
@@ -67,16 +67,9 @@ public class DefaultRetryPolicy(
         val allowed =
             attempt in 1..maxRetries &&
                 (method.isIdempotent || retryNonIdempotent) &&
-                isRetryable(error)
+                error.isTransient(isRetryableStatus)
         return if (allowed) delayFor(attempt, error) else null
     }
-
-    private fun isRetryable(error: NetworkError): Boolean =
-        when (error) {
-            NetworkError.Timeout, NetworkError.NoInternetConnection -> true
-            is NetworkError.ServerError -> isRetryableStatus(error.statusCode)
-            else -> false
-        }
 
     private fun delayFor(
         attempt: Int,
@@ -99,8 +92,6 @@ public class DefaultRetryPolicy(
         public const val DEFAULT_MAX_RETRIES: Int = 2
         public const val DEFAULT_BACKOFF_BASE_MILLIS: Long = 500
         public const val DEFAULT_BACKOFF_MAX_MILLIS: Long = 10_000
-        private const val STATUS_TOO_MANY_REQUESTS = 429
-        private const val STATUS_SERVER_ERROR = 500
         private const val MAX_BACKOFF_SHIFT = 16
     }
 }

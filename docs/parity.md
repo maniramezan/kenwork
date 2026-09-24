@@ -54,3 +54,11 @@ These leverage Kotlin/coroutines idioms and have no required SwiftyNetwork count
   and `Repository.stream(...)` (`Flow<E>`) for offline-first, single-source-of-truth UIs.
 - **Single-flight repository loads:** concurrent cache-miss `fetch`es for one key coalesce into a
   single network call.
+- **Background mutations:** `:mutations` (`MutationQueue`, `MutationKey`, `MutationStatus`,
+  `MutationCodec`, `MutationStore`) queues fire-and-forget writes with coalescing, retry, and
+  optional persistence across process death.
+- **Observability hooks:** `RequestInterceptor`, `RequestHeaderProvider`, and `StructuredLogSink`
+  for tracing, context propagation, and structured logs without an OpenTelemetry dependency.
+- **Error helpers:** `NetworkError.httpStatusCode` exposes the status carried by any error case.
+- **KMP core:** `:network-core` (`KenworkHttpClient`) shares a JSON/redirect client policy across
+  Android, JVM/Desktop, and iOS.

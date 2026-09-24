@@ -1,5 +1,6 @@
 package io.github.maniramezan.kenwork.network
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -8,6 +9,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -48,6 +51,9 @@ public class OAuthAuthorizationProvider(
     private var accessToken: String = initialAccessToken
     private var inFlight: Deferred<Boolean>? = null
 
+    @Volatile
+    private var closed: Boolean = false
+
     /** The current access token. */
     public suspend fun currentAccessToken(): String = mutex.withLock { accessToken }
 
@@ -56,6 +62,7 @@ public class OAuthAuthorizationProvider(
     override suspend fun refreshAuthorizationIfNeeded(): Boolean {
         val deferred =
             mutex.withLock {
+                if (closed) return false
                 inFlight ?: scope
                     .async(start = CoroutineStart.LAZY) {
                         try {
@@ -69,7 +76,15 @@ public class OAuthAuthorizationProvider(
                         it.start()
                     }
             }
-        return deferred.await()
+        @Suppress("SwallowedException")
+        return try {
+            deferred.await()
+        } catch (cancelled: CancellationException) {
+            // Rethrow if *this caller* was cancelled; otherwise the provider was closed mid-refresh,
+            // which must surface as a failed refresh rather than a stray cancellation.
+            currentCoroutineContext().ensureActive()
+            false
+        }
     }
 
     private suspend fun performRefresh(): Boolean {
@@ -80,9 +95,12 @@ public class OAuthAuthorizationProvider(
 
     /**
      * Cancels the internal coroutine scope used to coalesce refreshes. Call when the provider is
-     * discarded; any in-flight refresh is cancelled and subsequent refreshes will fail.
+     * discarded (e.g. on sign-out): any in-flight refresh is cancelled, and it and every subsequent
+     * [refreshAuthorizationIfNeeded] report `false`, so requests fail with
+     * [NetworkError.AuthorizationRefreshFailed] instead of refreshing.
      */
     public fun close() {
+        closed = true
         scope.cancel()
     }
 }
