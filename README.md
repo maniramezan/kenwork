@@ -23,7 +23,7 @@ free (plain constructors + a `Configuration` object).
 
 ```kotlin
 dependencies {
-    val kenworkVersion = "0.5.2" // x-release-please-version
+    val kenworkVersion = "0.6.0" // x-release-please-version
     implementation("io.github.maniramezan.kenwork:network-core:$kenworkVersion") // KMP
     implementation("io.github.maniramezan.kenwork:network:$kenworkVersion")
     implementation("io.github.maniramezan.kenwork:cache:$kenworkVersion")        // optional
