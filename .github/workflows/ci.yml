@@ -26,7 +26,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Test shared HTTP policy on the iOS simulator
         run: ./gradlew :network-core:iosSimulatorArm64Test
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: ios-core-reports
@@ -50,7 +50,7 @@ jobs:
       - name: Build API docs
         run: ./gradlew dokkaGenerate
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: reports
