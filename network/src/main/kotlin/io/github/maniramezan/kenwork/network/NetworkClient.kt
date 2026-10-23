@@ -13,6 +13,7 @@ import io.ktor.http.takeFrom
 import io.ktor.util.reflect.TypeInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -109,7 +110,10 @@ public class NetworkClient(
         }
     }
 
-    /** Runs the request, retrying transient failures per [NetworkClientConfiguration]. */
+    /**
+     * Runs the request, retrying transient failures per the context's [RetryPolicyOverride], else
+     * [NetworkClientConfiguration.retryPolicy].
+     */
     private suspend fun attemptWithRetry(
         client: HttpClient,
         config: NetworkClientConfiguration,
@@ -119,6 +123,7 @@ public class NetworkClient(
         responseType: TypeInfo,
         startNs: Long,
     ): Any? {
+        val retryPolicy = currentCoroutineContext()[RetryPolicyOverride]?.retryPolicy ?: config.retryPolicy
         var attempt = 0
         while (true) {
             val mapped: NetworkError =
@@ -136,7 +141,7 @@ public class NetworkClient(
                 } catch (error: Throwable) {
                     error.toNetworkError()
                 }
-            val delayMillis = config.retryPolicy.retryDelayMillis(attempt + 1, endpoint.method, mapped)
+            val delayMillis = retryPolicy.retryDelayMillis(attempt + 1, endpoint.method, mapped)
             config.eventListener?.onEvent(
                 mapped.toEvent(endpoint, elapsedMs(startNs), attempt, isFinalAttempt = delayMillis == null),
             )
