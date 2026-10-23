@@ -40,7 +40,10 @@ import java.util.concurrent.ConcurrentHashMap
  *   mutation into non-idempotent retry never loosens the client's own default. It is also the
  *   *only* retry layer: each attempt runs under `withRetryPolicy(RetryPolicy.None)`, so a
  *   [io.github.maniramezan.kenwork.network.NetworkClient] doesn't retry underneath the queue and
- *   multiply the attempts. With the defaults, a mutation is sent at most 3 times.
+ *   multiply the attempts. With the defaults, a mutation has at most 3 queue attempts; OAuth's
+ *   `401` refresh-and-replay remains a separate path within each attempt.
+ *   The client's configured connectivity gate is awaited before each queue attempt, using the
+ *   client's time bound, so disabling nested retries does not bypass connectivity waiting.
  * - **Persistence**: pass a [MutationCodec] to [enqueue] to have the mutation survive in [store]
  *   (see [MutationStore] for durability); omit it for a purely in-process, fire-and-forget mutation.
  * - **Status**: observe [statusFlow] for a key to reflect pending/retrying/succeeded/failed in the UI.
@@ -94,7 +97,8 @@ public class MutationQueue(
      * Cancels any pending or in-flight mutation for [key].
      *
      * If a mutation is currently retrying or executing, it is cancelled. The persisted record
-     * (if any) is removed from [store], and [statusFlow] for [key] transitions to `null`.
+     * (if any) is removed from [store], and [statusFlow] for [key] transitions to `null`. Persisted
+     * records are also removed before [restore] has created a worker for them.
      *
      * Reporting `null` indicates that the queue is idle for this key without introducing a
      * new [MutationStatus] subclass that would break consumers with exhaustive `when` expressions.
@@ -102,6 +106,7 @@ public class MutationQueue(
     public suspend fun cancel(key: MutationKey) {
         workersMutex.withLock {
             workers.remove(key)?.cancel()
+            store.loadAll().filter { it.key == key.value }.forEach { store.remove(it.id) }
             // Reset rather than remove the flow: observers that already hold it must keep seeing
             // updates from later enqueues under the same key.
             synchronized(statuses) { statuses[key]?.value = null }
@@ -141,9 +146,8 @@ public class MutationQueue(
                     enqueuedAtMillis = System.currentTimeMillis(),
                 )
             }
-        record?.let { store.save(it) }
-
         workersMutex.withLock {
+            record?.let { store.save(it) }
             workerFor(key).submit(Enqueued(mutation, record, retryPolicy ?: defaultRetryPolicy))
         }
         return MutationHandle(id, key)
@@ -159,11 +163,13 @@ public class MutationQueue(
      * untouched in [store] (so a later app version that registers the codec can still recover them).
      */
     public suspend fun restore() {
-        store
-            .loadAll()
-            .groupBy(MutationRecord::key)
-            .values
-            .forEach { records -> restoreNewest(records) }
+        workersMutex.withLock {
+            store
+                .loadAll()
+                .groupBy(MutationRecord::key)
+                .values
+                .forEach { records -> restoreNewest(records) }
+        }
     }
 
     /**
@@ -198,9 +204,7 @@ public class MutationQueue(
         // to restore it and then clean up its predecessors.
         records.filterNot { it === record }.forEach { store.remove(it.id) }
         val mutation = QueuedMutation(record.id, key, decoded.endpoint, decoded.body, decoded.bodyType)
-        workersMutex.withLock {
-            workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
-        }
+        workerFor(key).submit(Enqueued(mutation, record, defaultRetryPolicy))
     }
 
     private fun statusFlowFor(key: MutationKey): MutableStateFlow<MutationStatus?> =

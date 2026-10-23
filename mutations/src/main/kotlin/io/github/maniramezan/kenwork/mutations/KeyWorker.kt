@@ -172,7 +172,7 @@ internal class KeyWorker(
         try {
             // The queue's retry policy is the only retry layer: a client retrying underneath it
             // would multiply attempts (3 queue attempts x 3 client attempts by default).
-            withRetryPolicy(RetryPolicy.None) {
+            withRetryPolicy(RetryPolicy.None, awaitReachabilityBeforeRequest = true) {
                 apiClient.request<Unit>(active.mutation.endpoint, active.mutation.body, active.mutation.bodyType, typeInfo<Unit>())
             }
             null

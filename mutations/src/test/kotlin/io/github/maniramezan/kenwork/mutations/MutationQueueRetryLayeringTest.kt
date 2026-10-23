@@ -3,6 +3,7 @@ package io.github.maniramezan.kenwork.mutations
 import io.github.maniramezan.kenwork.network.DefaultRetryPolicy
 import io.github.maniramezan.kenwork.network.HttpMethod
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
+import io.github.maniramezan.kenwork.testing.FakeReachabilityGate
 import io.github.maniramezan.kenwork.testing.mockNetworkClient
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
@@ -25,9 +26,10 @@ class MutationQueueRetryLayeringTest {
     fun `the queue's retry policy is the only retry layer, even over a retrying client`() =
         runTest {
             val calls = AtomicInteger(0)
+            val gate = FakeReachabilityGate()
             // The client would retry an idempotent PUT twice on its own.
             val client =
-                mockNetworkClient(retryPolicy = DefaultRetryPolicy(backoffBaseMillis = 0)) {
+                mockNetworkClient(retryPolicy = DefaultRetryPolicy(backoffBaseMillis = 0), reachabilityGate = gate) {
                     calls.incrementAndGet()
                     respond("", HttpStatusCode.ServiceUnavailable)
                 }
@@ -44,5 +46,6 @@ class MutationQueueRetryLayeringTest {
 
             // One initial attempt plus the queue's two retries — not 3 x 3 = 9.
             assertEquals(3, calls.get())
+            assertEquals(3, gate.awaitCount)
         }
 }

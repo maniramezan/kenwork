@@ -27,6 +27,8 @@ public val DefaultKenworkJson: Json =
  * @property reachabilityGate optional connectivity gate (e.g. `networkMonitor.asReachabilityGate()`):
  *   before each retry's backoff, the client waits up to [reachabilityWaitMillis] for connectivity, so
  *   retries park while offline instead of burning attempts. `null` disables the wait.
+ *   External retry loops can also wait before each request with [withRetryPolicy]'s
+ *   `awaitReachabilityBeforeRequest` option; `MutationQueue` enables it automatically.
  * @property reachabilityWaitMillis cap on how long a single retry waits on [reachabilityGate].
  * @property timeoutMillis per-request timeout.
  * @property retryDelayMillis delay between a successful refresh and the retry.
