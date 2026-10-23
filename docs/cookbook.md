@@ -198,6 +198,11 @@ repo.streamOrNull(GetVideo(42), key).collect { video -> if (video == null) showE
 cache.changes().collect { change -> /* CacheChange.Updated / Removed / Cleared */ }
 ```
 
+Cache change notifications are invalidations, not a lossless event log. When maintaining a
+current value directly from `cache.changes()`, re-read your key on every notification, even when
+it names another key: bursts can drop notifications, and layered-cache writes can evict other
+keys. Repository streams do this automatically and conflate bursts before reading.
+
 ## Mutations (fire-and-forget writes with retry)
 
 The `:mutations` module is for "forgivable" writes — likes, follows, and similar mutations a

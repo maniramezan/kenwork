@@ -26,7 +26,8 @@ public interface Repository<E : Any> {
 
     /**
      * Observes the entity for [endpoint]/[cacheKey] reactively: emits the result of an initial
-     * [fetch], then re-emits whenever the underlying local store reports a change for [cacheKey].
+     * [fetch], then re-reads [cacheKey] whenever the underlying local store reports a change.
+     * Intermediate values may be conflated; unchanged values are not emitted by [GenericRepository].
      *
      * The default implementation is non-reactive (it emits a single [fetch]); [GenericRepository]
      * overrides it to follow [LocalDataSource.changes].
