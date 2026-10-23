@@ -14,6 +14,27 @@ import kotlin.test.assertTrue
 
 class MutationQueueCancelTest {
     @Test
+    fun `cancel before restore removes every persisted record for only that key`() =
+        runTest {
+            val key = MutationKey("cancelled")
+            val store = InMemoryMutationStore()
+            val payload = SetLikeStateCodec.encode(SetLikeState(42), LikeBody(true))
+            store.save(MutationRecord("older", key.value, SetLikeStateCodec.id, payload, 0L))
+            store.save(MutationRecord("newer", key.value, SetLikeStateCodec.id, payload, 1L))
+            val other = MutationRecord("other", "another-key", SetLikeStateCodec.id, payload, 0L)
+            store.save(other)
+            val apiClient = RecordingApiClient()
+            val queue = MutationQueue(apiClient, backgroundScope, store = store, codecs = listOf(SetLikeStateCodec))
+
+            queue.cancel(key)
+
+            assertEquals(listOf(other), store.loadAll())
+            queue.restore()
+            settle()
+            assertEquals(1, apiClient.calls.size)
+        }
+
+    @Test
     fun `cancel interrupts an in-flight request and allows a new enqueue`() =
         runTest {
             val interrupted = CompletableDeferred<Unit>()

@@ -153,8 +153,19 @@ It's useful when you run your own retry loop and don't want the client retrying 
 val user = withRetryPolicy(RetryPolicy.None) { client.request<User>(UserEndpoint(id)) }
 ```
 
-`MutationQueue` already does this for every attempt, so its `retryPolicy` is the only retry layer
-for queued mutations. With the defaults, a mutation is sent at most 3 times.
+When your outer retry loop also needs the client's configured connectivity gate, opt into a
+bounded wait before each request:
+
+```kotlin
+val user = withRetryPolicy(RetryPolicy.None, awaitReachabilityBeforeRequest = true) {
+    client.request<User>(UserEndpoint(id))
+}
+```
+
+`MutationQueue` enables this option automatically for every attempt. It retains the client's
+configured gate and `reachabilityWaitMillis` while its own `retryPolicy` controls transient
+retries. With the defaults, a mutation has at most 3 queue attempts. OAuth's `401` refresh-and-replay
+is a separate path and may send more than one HTTP request within an attempt.
 
 ## Reachability-aware retry
 
@@ -277,6 +288,10 @@ queue.enqueue(key, SetLikeState(42), LikeBody(true), codec = SetLikeStateCodec)
 val queue = MutationQueue(apiClient = client, scope = appScope, store = durableStore, codecs = listOf(SetLikeStateCodec))
 queue.restore()   // replays whatever didn't finish before the process died
 ```
+
+`queue.cancel(key)` removes matching persisted records even before `restore()` has run. Enqueue,
+restore, and cancellation serialize queue admission with persistence so a concurrent operation
+cannot replay a cancelled snapshot afterwards.
 
 `InMemoryMutationStore` is the shipped default; implement `MutationStore` (three suspend
 functions: `save`/`remove`/`loadAll` over the fully-`@Serializable` `MutationRecord`) against
