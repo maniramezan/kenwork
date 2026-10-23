@@ -105,9 +105,10 @@ A `401` automatically triggers a single coalesced token refresh and one retry.
 test-verified "videos" feature built on every module, meant to be read top to bottom:
 
 1. [`VideoApi.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/VideoApi.kt) — endpoints and DTOs.
-2. [`AuthenticatedClient.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/AuthenticatedClient.kt) — OAuth refresh, retry, reachability, and telemetry configuration.
+2. [`AuthenticatedSession.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/AuthenticatedSession.kt) — an owned session for OAuth refresh, retry, reachability, and telemetry configuration.
 3. [`VideoRepository.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/VideoRepository.kt) — memory + disk `LayeredCache` behind a `GenericRepository` with reactive reads.
 4. [`LikeController.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/LikeController.kt) — optimistic likes through a persisted, coalescing `MutationQueue`.
+5. [`TracingInterceptor.kt`](samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/TracingInterceptor.kt) — an app-owned OpenTelemetry adapter that carries span context across coroutine suspension.
 
 The [sample tests](samples/src/test/kotlin/io/github/maniramezan/kenwork/samples) run each flow
 with the `:testing` fakes, so the samples can't drift from the API. The module is not published.

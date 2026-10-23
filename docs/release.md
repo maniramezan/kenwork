@@ -33,8 +33,11 @@ SemVer tags and are not compatible with `v`-prefixed manual publish inputs.
 | `MAVEN_CENTRAL_PASSWORD` | Sonatype Central Portal token password |
 | `SIGNING_IN_MEMORY_KEY` | ASCII-armored GPG private key |
 | `SIGNING_IN_MEMORY_KEY_PASSWORD` | GPG key passphrase |
-| `RELEASE_PLEASE_APP_ID` *(optional)* | GitHub App id so the release PR triggers CI and can auto-merge |
-| `RELEASE_PLEASE_APP_PRIVATE_KEY` *(optional)* | GitHub App private key |
+
+To let release PRs trigger CI and auto-merge, optionally configure the repository variable
+`RELEASE_PLEASE_APP_CLIENT_ID` with the GitHub App's client ID and the repository secret
+`RELEASE_PLEASE_APP_PRIVATE_KEY` with its private key. The release-please job reads these from
+repository configuration, so the private key must not be scoped only to the publishing environment.
 
 The `io.github.maniramezan` namespace must be verified on the Central Portal (the same account that
 publishes the ComposeUIComponents libraries).
