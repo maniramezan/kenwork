@@ -15,9 +15,12 @@ dependencies {
     implementation(project(":repository"))
     implementation(project(":mutations"))
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.opentelemetry.api)
+    implementation(libs.opentelemetry.kotlin)
 
     testImplementation(project(":testing"))
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.opentelemetry.sdk.testing)
 }
