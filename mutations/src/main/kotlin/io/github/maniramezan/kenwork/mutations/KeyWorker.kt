@@ -3,6 +3,7 @@ package io.github.maniramezan.kenwork.mutations
 import io.github.maniramezan.kenwork.network.ApiClient
 import io.github.maniramezan.kenwork.network.NetworkError
 import io.github.maniramezan.kenwork.network.RetryPolicy
+import io.github.maniramezan.kenwork.network.withRetryPolicy
 import io.ktor.util.reflect.typeInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -169,7 +170,11 @@ internal class KeyWorker(
 
     private suspend fun attemptOnce(active: Enqueued<Any>): NetworkError? =
         try {
-            apiClient.request<Unit>(active.mutation.endpoint, active.mutation.body, active.mutation.bodyType, typeInfo<Unit>())
+            // The queue's retry policy is the only retry layer: a client retrying underneath it
+            // would multiply attempts (3 queue attempts x 3 client attempts by default).
+            withRetryPolicy(RetryPolicy.None) {
+                apiClient.request<Unit>(active.mutation.endpoint, active.mutation.body, active.mutation.bodyType, typeInfo<Unit>())
+            }
             null
         } catch (error: CancellationException) {
             throw error

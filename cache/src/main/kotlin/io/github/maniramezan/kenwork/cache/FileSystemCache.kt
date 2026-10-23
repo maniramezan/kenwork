@@ -29,11 +29,14 @@ import kotlin.coroutines.CoroutineContext
  * directory may be shared. A malformed or unreadable file reads back as `null` rather than
  * throwing.
  *
- * When [maxSizeBytes] is set (default 50 MB), writes evict the oldest entries by last-modified
- * time until total disk usage for owned cache files is within the limit. Pass `maxSizeBytes = null`
- * to disable the limit (unbounded growth). Eviction emits [CacheChange.Removed] for keys this
- * instance has read or written; files from an earlier process cannot be mapped back from their
- * hashed names until they are read.
+ * When [maxSizeBytes] is set (default 50 MB), writes evict the least recently used entries (reads
+ * and writes both refresh an entry's last-modified time) until total disk usage for owned cache
+ * files is within the limit. The entry being written is evicted last, so it only goes when it alone
+ * exceeds the limit. The running total is tracked in memory, so the directory is only rescanned
+ * when a write crosses the limit; give each instance its own directory if you rely on the bound.
+ * Pass `maxSizeBytes = null` to disable the limit (unbounded growth). Eviction emits
+ * [CacheChange.Removed] for keys this instance has read or written; files from an earlier process
+ * cannot be mapped back from their hashed names until they are read.
  *
  * @param directory the storage directory; created on first write.
  * @param encode serializes a value to text.
@@ -76,6 +79,9 @@ public class FileSystemCache<V : Any>(
     private val mutex = Mutex()
     private val knownKeys = mutableMapOf<String, CacheKey>()
 
+    /** Bytes used by owned entry files, or `null` until the first scan (or after [removeAll]). */
+    private var ownedBytes: Long? = null
+
     private val changeFlow =
         MutableSharedFlow<CacheChange>(
             extraBufferCapacity = CHANGE_BUFFER_CAPACITY,
@@ -110,7 +116,13 @@ public class FileSystemCache<V : Any>(
             withContext(ioContext) {
                 mutex.withLock {
                     val file = fileFor(key)
-                    file.delete().also { if (it) knownKeys.remove(file.nameWithoutExtension) }
+                    val size = file.length()
+                    file.delete().also { deleted ->
+                        if (deleted) {
+                            knownKeys.remove(file.nameWithoutExtension)
+                            ownedBytes = ownedBytes?.minus(size)
+                        }
+                    }
                 }
             }
         if (removed) changeFlow.tryEmit(CacheChange.Removed(key))
@@ -121,6 +133,7 @@ public class FileSystemCache<V : Any>(
             mutex.withLock {
                 directory.listFiles { file -> file.isOwnedEntryOrOrphanedTemp() }?.forEach { it.delete() }
                 knownKeys.clear()
+                ownedBytes = null
             }
         }
         changeFlow.tryEmit(CacheChange.Cleared)
@@ -134,7 +147,11 @@ public class FileSystemCache<V : Any>(
             val separator = text.indexOf('\n')
             val timestamp = text.substring(0, separator).toLong()
             CacheEntry(decode(text.substring(separator + 1)), timestamp)
-        }.getOrNull()?.also { knownKeys[file.nameWithoutExtension] = key }
+        }.getOrNull()?.also {
+            knownKeys[file.nameWithoutExtension] = key
+            // Refresh recency so size-based eviction is least-recently-used, not oldest-written.
+            if (maxSizeBytes != null) file.setLastModified(currentTimeMillis())
+        }
     }
 
     private fun writeEntry(
@@ -144,6 +161,7 @@ public class FileSystemCache<V : Any>(
     ): List<CacheKey> {
         check(directory.exists() || directory.mkdirs()) { "Unable to create cache directory: $directory" }
         val destination = fileFor(key)
+        val previousBytes = destination.length()
         val temporary = File.createTempFile(destination.name, TEMPORARY_SUFFIX, directory)
         try {
             temporary.writeText("$timestamp\n${encode(value)}")
@@ -158,31 +176,47 @@ public class FileSystemCache<V : Any>(
         }
 
         knownKeys[destination.nameWithoutExtension] = key
-        return evictIfNeeded()
+        return evictIfNeeded(destination, destination.length() - previousBytes)
     }
 
-    private fun evictIfNeeded(): List<CacheKey> {
+    /**
+     * Evicts least recently used entries while owned files exceed [maxSizeBytes]. [written] goes
+     * last, so a fresh write is only dropped when it alone exceeds the limit.
+     */
+    private fun evictIfNeeded(
+        written: File,
+        deltaBytes: Long,
+    ): List<CacheKey> {
         val limit = maxSizeBytes ?: return emptyList()
-        val ownedFiles =
-            directory
-                .listFiles { file -> file.name.endsWith(SUFFIX) }
-                ?.sortedBy { it.lastModified() }
-                ?: return emptyList()
+        val tracked = ownedBytes?.plus(deltaBytes) ?: ownedFiles().sumOf { it.length() }
+        ownedBytes = tracked
+        if (tracked <= limit) return emptyList()
 
-        var totalBytes = ownedFiles.sumOf { it.length() }
-        if (totalBytes <= limit) return emptyList()
-
+        // Over the limit: rescan for an exact total, reading each file's size and mtime once.
+        val candidates =
+            ownedFiles()
+                .map { OwnedFile(it, it.lastModified(), it.length()) }
+                .sortedWith(compareBy<OwnedFile> { it.file == written }.thenBy { it.lastModified })
+        var totalBytes = candidates.sumOf { it.size }
         val evicted = mutableListOf<CacheKey>()
-        for (file in ownedFiles) {
+        for (candidate in candidates) {
             if (totalBytes <= limit) break
-            val fileSize = file.length()
-            if (file.delete()) {
-                totalBytes -= fileSize
-                knownKeys.remove(file.nameWithoutExtension)?.let(evicted::add)
+            if (candidate.file.delete()) {
+                totalBytes -= candidate.size
+                knownKeys.remove(candidate.file.nameWithoutExtension)?.let(evicted::add)
             }
         }
+        ownedBytes = totalBytes
         return evicted
     }
+
+    private fun ownedFiles(): List<File> = directory.listFiles { file -> file.name.endsWith(SUFFIX) }?.toList().orEmpty()
+
+    private class OwnedFile(
+        val file: File,
+        val lastModified: Long,
+        val size: Long,
+    )
 
     private fun fileFor(key: CacheKey): File = File(directory, hash(key.rawValue) + SUFFIX)
 

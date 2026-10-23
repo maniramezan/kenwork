@@ -210,6 +210,80 @@ class FileSystemCacheTest {
         }
 
     @Test
+    fun `eviction never drops the entry just written in favor of an older one`() =
+        runTest {
+            val cache =
+                FileSystemCache(
+                    directory = dir,
+                    encode = { it },
+                    decode = { it },
+                    maxSizeBytes = 8,
+                    ioContext = UnconfinedTestDispatcher(testScheduler),
+                )
+            val first = CacheKey("first")
+            val second = CacheKey("second")
+
+            cache.setValue("one", first, 1)
+            // Coarse mtime granularity or clock skew can make the older file look newer.
+            assertTrue(dir.listFiles()!!.single().setLastModified(System.currentTimeMillis() + 3_600_000L))
+            cache.setValue("two", second, 2)
+
+            assertNull(cache.value(first))
+            assertEquals("two", cache.value(second))
+        }
+
+    @Test
+    fun `reads refresh recency so eviction drops the least recently used entry`() =
+        runTest {
+            var now = 1_000_000L
+            val cache =
+                FileSystemCache(
+                    directory = dir,
+                    encode = { it },
+                    decode = { it },
+                    maxSizeBytes = 24,
+                    ioContext = UnconfinedTestDispatcher(testScheduler),
+                    currentTimeMillis = { now },
+                )
+            val first = CacheKey("first")
+            val second = CacheKey("second")
+            val third = CacheKey("third")
+
+            cache.setValue("one", first)
+            File(dir, dir.list()!!.single()).setLastModified(1_000L)
+            cache.setValue("two", second)
+            dir.listFiles()!!.filter { it.lastModified() != 1_000L }.forEach { it.setLastModified(2_000L) }
+            now = 3_000_000L
+            // Reading `first` makes `second` the least recently used entry.
+            assertEquals("one", cache.value(first))
+            cache.setValue("three", third)
+
+            assertEquals("one", cache.value(first))
+            assertNull(cache.value(second))
+            assertEquals("three", cache.value(third))
+        }
+
+    @Test
+    fun `removals are accounted for in the size limit`() =
+        runTest {
+            val cache =
+                FileSystemCache(
+                    directory = dir,
+                    encode = { it },
+                    decode = { it },
+                    maxSizeBytes = 10,
+                    ioContext = UnconfinedTestDispatcher(testScheduler),
+                )
+            cache.setValue("one", CacheKey("first"), 1)
+            cache.removeValue(CacheKey("first"))
+            cache.setValue("two", CacheKey("second"), 2)
+            cache.setValue("six", CacheKey("third"), 3)
+
+            assertEquals("two", cache.value(CacheKey("second")))
+            assertEquals("six", cache.value(CacheKey("third")))
+        }
+
+    @Test
     fun `old constructor signature remains available to compiled callers`() {
         val expected =
             listOf(

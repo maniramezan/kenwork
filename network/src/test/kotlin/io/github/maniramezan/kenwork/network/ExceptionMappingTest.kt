@@ -1,5 +1,6 @@
 package io.github.maniramezan.kenwork.network
 
+import io.ktor.client.network.sockets.ConnectTimeoutException
 import kotlinx.coroutines.runBlocking
 import java.net.ConnectException
 import java.net.UnknownHostException
@@ -19,6 +20,15 @@ class ExceptionMappingTest {
         runBlocking {
             val client = testClient { throw ConnectException("refused") }
             assertFailsWith<NetworkError.NoInternetConnection> { client.request<Sample>(TestEndpoint("x")) }
+        }
+
+    @Test
+    fun `maps connect timeouts to Timeout rather than NoInternetConnection`(): Unit =
+        runBlocking {
+            // Ktor's OkHttp engine reports a connect timeout as ConnectTimeoutException, which
+            // extends java.net.ConnectException.
+            val client = testClient { throw ConnectTimeoutException("connect timeout", null) }
+            assertFailsWith<NetworkError.Timeout> { client.request<Sample>(TestEndpoint("x")) }
         }
 
     @Test

@@ -428,6 +428,19 @@ public final class io/github/maniramezan/kenwork/network/RetryPolicy$Companion {
 	public final fun getNone ()Lio/github/maniramezan/kenwork/network/RetryPolicy;
 }
 
+public final class io/github/maniramezan/kenwork/network/RetryPolicyOverride : kotlin/coroutines/AbstractCoroutineContextElement {
+	public static final field Key Lio/github/maniramezan/kenwork/network/RetryPolicyOverride$Key;
+	public fun <init> (Lio/github/maniramezan/kenwork/network/RetryPolicy;)V
+	public final fun getRetryPolicy ()Lio/github/maniramezan/kenwork/network/RetryPolicy;
+}
+
+public final class io/github/maniramezan/kenwork/network/RetryPolicyOverride$Key : kotlin/coroutines/CoroutineContext$Key {
+}
+
+public final class io/github/maniramezan/kenwork/network/RetryPolicyOverrideKt {
+	public static final fun withRetryPolicy (Lio/github/maniramezan/kenwork/network/RetryPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public final class io/github/maniramezan/kenwork/network/SslPinningConfiguration {
 	public static final field Companion Lio/github/maniramezan/kenwork/network/SslPinningConfiguration$Companion;
 	public fun <init> (Ljava/util/Map;)V
