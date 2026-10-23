@@ -88,6 +88,10 @@ class FirebaseAuthProvider(private val auth: FirebaseAuth) : AuthorizationProvid
 }
 ```
 
+With `OAuthAuthorizationProvider`, late `401` responses for an already-replaced token replay
+with the current token instead of minting another one. Concurrent refreshes still share one
+in-flight operation, and `maxAuthRefreshAttempts` continues to bound each request's replays.
+
 ## Error handling
 
 ```kotlin
