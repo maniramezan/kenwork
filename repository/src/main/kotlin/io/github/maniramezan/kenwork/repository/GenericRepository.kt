@@ -7,14 +7,16 @@ import io.github.maniramezan.kenwork.cache.shouldUseCachedData
 import io.github.maniramezan.kenwork.network.NetworkDataSource
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
 import io.ktor.util.reflect.TypeInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -37,8 +39,7 @@ import kotlinx.coroutines.sync.withLock
  * @param scope coroutine scope hosting the coalesced loads. Pass your own to tie loads to a
  *   lifecycle you control; when omitted, an internal `SupervisorJob` on [Dispatchers.Default] is
  *   created and [close] cancels it. [close] never cancels a scope you supplied, and a failed load
- *   never cancels it either — each load runs under its own supervisor, and its failure is
- *   delivered only to the callers awaiting it.
+ *   never cancels it either — its failure is delivered only to the callers awaiting it.
  *
  * Prefer the reified `GenericRepository(networkDataSource, localDataSource)` factory below, which
  * captures [responseType] for you.
@@ -53,7 +54,7 @@ public class GenericRepository<E : Any>(
     private val ownsScope: Boolean = scope == null
     private val coalesceScope: CoroutineScope = scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val inFlightMutex = Mutex()
-    private val inFlight = HashMap<CacheKey, Deferred<E>>()
+    private val inFlight = HashMap<CacheKey, Deferred<Result<E>>>()
 
     override suspend fun fetch(
         endpoint: NetworkEndpoint,
@@ -91,6 +92,9 @@ public class GenericRepository<E : Any>(
     /**
      * Cancels in-flight coalesced loads and releases the internal coroutine scope. No-op when a
      * caller-supplied scope was provided — cancel that scope yourself.
+     *
+     * Loads that were in flight, and any network load requested afterwards, fail with
+     * [IllegalStateException]; cache hits keep being served.
      */
     public fun close() {
         if (ownsScope) coalesceScope.cancel()
@@ -145,26 +149,37 @@ public class GenericRepository<E : Any>(
         val deferred =
             inFlightMutex.withLock {
                 inFlight[cacheKey]?.let { return@withLock it }
-                // Each load gets its own supervisor so a failure reaches only the callers awaiting
-                // it, never the (possibly caller-owned) parent scope. Completing the supervisor right
-                // away lets it finish with the load instead of lingering as an active child.
-                val loadJob = SupervisorJob(coalesceScope.coroutineContext[Job])
-                lateinit var started: Deferred<E>
+                // The load reports failure as a Result instead of throwing, so it reaches only the
+                // callers awaiting it and never fails (and cancels) a possibly caller-owned scope.
+                lateinit var started: Deferred<Result<E>>
                 started =
-                    coalesceScope.async(loadJob) {
+                    coalesceScope.async {
                         try {
                             val entity: E = networkDataSource.request(endpoint, null, null, responseType)
                             localDataSource.write(entity, cacheKey)
-                            entity
+                            Result.success(entity)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Throwable) {
+                            Result.failure(error)
                         } finally {
                             inFlightMutex.withLock { if (inFlight[cacheKey] === started) inFlight.remove(cacheKey) }
                         }
                     }
-                loadJob.complete()
                 inFlight[cacheKey] = started
                 started
             }
-        return deferred.await()
+        val result =
+            try {
+                deferred.await()
+            } catch (cancelled: CancellationException) {
+                // Rethrow if *this caller* was cancelled. Otherwise the loading scope was cancelled
+                // (close(), or a caller-supplied scope ending), which must not silently cancel a caller
+                // that is still active.
+                currentCoroutineContext().ensureActive()
+                throw IllegalStateException("GenericRepository's loading scope is no longer active", cancelled)
+            }
+        return result.getOrThrow()
     }
 }
 

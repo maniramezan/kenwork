@@ -8,6 +8,7 @@ import io.github.maniramezan.kenwork.network.HttpMethod
 import io.github.maniramezan.kenwork.network.NetworkDataSource
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
 import io.ktor.util.reflect.TypeInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -18,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -115,6 +117,16 @@ class RepositoryDefaultsTest {
             val repository = GenericRepository<DefaultsItem>(network, CacheBasedLocalDataSource(InMemoryCache()))
             repository.fetch(endpoint, key, CachePolicy.ReloadIgnoringCache)
             repository.close()
+        }
+
+    @Test
+    fun `a load after close fails with an error instead of leaking cancellation`() =
+        runTest {
+            val repository = GenericRepository<DefaultsItem>(network, CacheBasedLocalDataSource(InMemoryCache()))
+            repository.close()
+            val error = assertFailsWith<IllegalStateException> { repository.fetch(endpoint, key, CachePolicy.ReloadIgnoringCache) }
+            // CancellationException is an IllegalStateException, and would silently cancel the caller.
+            assertFalse(error is CancellationException, "got $error")
         }
 
     @Test

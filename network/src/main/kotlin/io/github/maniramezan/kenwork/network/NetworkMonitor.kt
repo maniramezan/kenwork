@@ -51,14 +51,13 @@ public class NetworkMonitor(
     /** Whether the network is currently reachable. */
     public val isReachable: Boolean get() = mutableStatus.value == NetworkReachability.REACHABLE
 
+    // Callbacks never query ConnectivityManager synchronously: Android documents that as racy
+    // (it can return the network being lost). On API 26+ onCapabilitiesChanged always follows
+    // onAvailable, and a default-network onLost means there is no default network left.
     private val callback =
         object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                mutableStatus.value = currentReachability()
-            }
-
             override fun onLost(network: Network) {
-                mutableStatus.value = currentReachability()
+                mutableStatus.value = NetworkReachability.UNREACHABLE
             }
 
             override fun onCapabilitiesChanged(

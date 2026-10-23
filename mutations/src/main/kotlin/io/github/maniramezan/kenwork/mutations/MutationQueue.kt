@@ -37,7 +37,10 @@ import java.util.concurrent.ConcurrentHashMap
  * - **Retry**: reuses [RetryPolicy] (the same interface [io.github.maniramezan.kenwork.network.NetworkClient]
  *   uses), but as a queue-level (or per-[enqueue]) setting distinct from
  *   [io.github.maniramezan.kenwork.network.NetworkClientConfiguration.retryPolicy] — so opting a
- *   mutation into non-idempotent retry never loosens the client's own default.
+ *   mutation into non-idempotent retry never loosens the client's own default. It is also the
+ *   *only* retry layer: each attempt runs under `withRetryPolicy(RetryPolicy.None)`, so a
+ *   [io.github.maniramezan.kenwork.network.NetworkClient] doesn't retry underneath the queue and
+ *   multiply the attempts. With the defaults, a mutation is sent at most 3 times.
  * - **Persistence**: pass a [MutationCodec] to [enqueue] to have the mutation survive in [store]
  *   (see [MutationStore] for durability); omit it for a purely in-process, fire-and-forget mutation.
  * - **Status**: observe [statusFlow] for a key to reflect pending/retrying/succeeded/failed in the UI.
@@ -99,7 +102,9 @@ public class MutationQueue(
     public suspend fun cancel(key: MutationKey) {
         workersMutex.withLock {
             workers.remove(key)?.cancel()
-            synchronized(statuses) { statuses.remove(key)?.value = null }
+            // Reset rather than remove the flow: observers that already hold it must keep seeing
+            // updates from later enqueues under the same key.
+            synchronized(statuses) { statuses[key]?.value = null }
         }
     }
 

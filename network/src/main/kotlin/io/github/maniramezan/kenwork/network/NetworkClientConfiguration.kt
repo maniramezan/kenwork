@@ -23,6 +23,7 @@ public val DefaultKenworkJson: Json =
  * @property retryPolicy decides whether/when to retry a failed request. Defaults to
  *   [DefaultRetryPolicy] (jittered exponential backoff for timeouts, lost connectivity, `429`, and
  *   `5xx`, honoring `Retry-After`). Supply your own or [RetryPolicy.None] to disable retries.
+ *   [withRetryPolicy] replaces it for the requests made inside one block.
  * @property reachabilityGate optional connectivity gate (e.g. `networkMonitor.asReachabilityGate()`):
  *   before each retry's backoff, the client waits up to [reachabilityWaitMillis] for connectivity, so
  *   retries park while offline instead of burning attempts. `null` disables the wait.

@@ -45,7 +45,8 @@ for the parity tests in `:network`, `:cache`, and `:repository`.
 These leverage Kotlin/coroutines idioms and have no required SwiftyNetwork counterpart:
 
 - **Pluggable retry:** `RetryPolicy` / `DefaultRetryPolicy` (timeouts, lost connectivity, `429`,
-  `5xx`; jittered exponential backoff; honors `Retry-After`; idempotent-only by default).
+  `5xx`; jittered exponential backoff; honors `Retry-After`; idempotent-only by default), and
+  `withRetryPolicy` / `RetryPolicyOverride` to swap the policy for a block of calls.
 - **Reachability-aware retry:** `ReachabilityGate` + `NetworkMonitor.asReachabilityGate()` /
   `awaitReachable()` — retries park while offline and resume on reconnect.
 - **Concrete persistent cache:** `FileSystemCache` (file-per-key `PersistentCache`; caller-supplied

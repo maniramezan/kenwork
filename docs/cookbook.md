@@ -145,6 +145,17 @@ NetworkClientConfiguration(
 Each attempt emits a `NetworkEvent` (0-based `event.attempt`) to the `eventListener`, so retries are
 observable in telemetry.
 
+To change the policy for a block of calls without reconfiguring the client, use `withRetryPolicy`.
+It's useful when you run your own retry loop and don't want the client retrying underneath it:
+
+```kotlin
+// Exactly one attempt for these calls, whatever the client's configured policy.
+val user = withRetryPolicy(RetryPolicy.None) { client.request<User>(UserEndpoint(id)) }
+```
+
+`MutationQueue` already does this for every attempt, so its `retryPolicy` is the only retry layer
+for queued mutations. With the defaults, a mutation is sent at most 3 times.
+
 ## Reachability-aware retry
 
 ```kotlin
