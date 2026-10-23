@@ -37,6 +37,8 @@ public interface AuthorizationProvider {
  * Concurrent refreshes are **coalesced**: if several requests 401 at once, [refreshTokenHandler]
  * runs exactly once and all callers await the same result — the Kotlin analog of SwiftyNetwork's
  * in-flight refresh `Task`, and of Novalingo's sign-in mutex choke point.
+ * When a late `401` rejects a token another request has already replaced, [NetworkClient] reuses
+ * the current token without refreshing it again. This check and refresh admission share the mutex.
  *
  * @param initialAccessToken the token to start with.
  * @param refreshTokenHandler mints a fresh access token, or returns `null` if refresh failed.
@@ -59,11 +61,18 @@ public class OAuthAuthorizationProvider(
 
     override suspend fun currentAuthorization(): AuthorizationType = AuthorizationType.Bearer(mutex.withLock { accessToken })
 
-    override suspend fun refreshAuthorizationIfNeeded(): Boolean {
+    override suspend fun refreshAuthorizationIfNeeded(): Boolean = refreshAuthorization(rejectedAccessToken = null)
+
+    /** Refreshes only if the rejected credential is still current, joining any in-flight refresh. */
+    internal suspend fun refreshAfterRejection(rejectedAccessToken: String): Boolean = refreshAuthorization(rejectedAccessToken)
+
+    private suspend fun refreshAuthorization(rejectedAccessToken: String?): Boolean {
         val deferred =
             mutex.withLock {
                 if (closed) return false
-                inFlight ?: scope
+                inFlight?.let { return@withLock it }
+                if (rejectedAccessToken != null && rejectedAccessToken != accessToken) return true
+                scope
                     .async(start = CoroutineStart.LAZY) {
                         try {
                             performRefresh()
@@ -104,3 +113,11 @@ public class OAuthAuthorizationProvider(
         scope.cancel()
     }
 }
+
+/** Gives the built-in OAuth provider the rejected credential; other providers retain their refresh contract. */
+internal suspend fun AuthorizationProvider.refreshAfterRejection(authorization: AuthorizationType): Boolean =
+    if (this is OAuthAuthorizationProvider && authorization is AuthorizationType.Bearer) {
+        refreshAfterRejection(authorization.token)
+    } else {
+        refreshAuthorizationIfNeeded()
+    }
