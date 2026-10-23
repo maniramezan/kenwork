@@ -46,7 +46,7 @@ explicit-engine ownership applies to `NetworkClientConfiguration.engine`.
 `NetworkClient.close()` is suspending and prevents new requests; already acquired requests drain
 before its HTTP client closes. Close `OAuthAuthorizationProvider` separately: it owns its refresh
 scope and may be shared by clients. `GenericRepository.close()` cancels only its internally
-created scope. `MutationQueue` always uses a caller-owned scope. Cancelling a scope does not roll
+created scope; network loads in flight or requested afterwards fail with `IllegalStateException`. `MutationQueue` always uses a caller-owned scope. Cancelling a scope does not roll
 back an HTTP request already accepted by the server.
 
 ## Extending the shared surface

@@ -144,4 +144,23 @@ class MutationQueueCancelTest {
             settle()
             assertEquals(MutationStatus.Succeeded, queue.statusFlow(key).value)
         }
+
+    @Test
+    fun `a status flow obtained before cancel keeps reporting after a new enqueue`() =
+        runTest {
+            val queue = MutationQueue(apiClient = RecordingApiClient(), scope = backgroundScope)
+            val key = MutationKey.of("like", "video", 5)
+            // A ViewModel typically grabs the flow once and keeps collecting it.
+            val observed = queue.statusFlow(key)
+
+            queue.enqueue(key, SetLikeState(5), LikeBody(true))
+            settle()
+            queue.cancel(key)
+            settle()
+            assertNull(observed.value)
+
+            queue.enqueue(key, SetLikeState(5), LikeBody(false))
+            settle()
+            assertEquals(MutationStatus.Succeeded, observed.value)
+        }
 }

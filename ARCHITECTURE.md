@@ -69,13 +69,15 @@ coroutines as follows:
 caller starts a single `Deferred` on the repository's scope, registered under a `Mutex`; the rest
 await it. One network request serves the whole burst — the same pattern as the auth refresh above.
 Pass your own `CoroutineScope` to tie those loads to a lifecycle you own (otherwise an internal
-`SupervisorJob` is created and `close()` cancels it). Each load runs under its own completing
-`SupervisorJob`, so a failed load reaches only the callers awaiting it and never cancels a
-caller-supplied scope.
+`SupervisorJob` is created and `close()` cancels it). A load reports its failure as a `Result`
+rather than throwing, so the failure reaches only the callers awaiting it and never cancels a
+caller-supplied scope. When the loading scope is cancelled under a caller that is still active,
+that caller gets an `IllegalStateException`, never a stray `CancellationException`.
 
 ### Cache tiers
 
-`InMemoryCache` (volatile, LRU) and `FileSystemCache` (durable `PersistentCache`, one file per key)
+`InMemoryCache` (volatile, LRU) and `FileSystemCache` (durable `PersistentCache`, one file per key,
+size-bounded LRU by file mtime with an in-memory running total so only over-limit writes rescan)
 both implement `TimestampedCache`, so `LayeredCache(memory, disk)` reads through memory → disk and
 promotes a disk hit into memory **without losing its age**. `FileSystemCache` keeps `:cache` free of
 a serialization dependency by taking caller-supplied `encode`/`decode` lambdas (e.g. wrap

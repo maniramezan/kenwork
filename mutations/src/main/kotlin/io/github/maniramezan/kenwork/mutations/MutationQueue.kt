@@ -99,7 +99,9 @@ public class MutationQueue(
     public suspend fun cancel(key: MutationKey) {
         workersMutex.withLock {
             workers.remove(key)?.cancel()
-            synchronized(statuses) { statuses.remove(key)?.value = null }
+            // Reset rather than remove the flow: observers that already hold it must keep seeing
+            // updates from later enqueues under the same key.
+            synchronized(statuses) { statuses[key]?.value = null }
         }
     }
 

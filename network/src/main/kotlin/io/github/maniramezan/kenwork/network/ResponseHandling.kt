@@ -1,6 +1,7 @@
 package io.github.maniramezan.kenwork.network
 
 import io.ktor.client.call.body
+import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.readRawBytes
@@ -91,7 +92,8 @@ internal fun Throwable.toNetworkError(): NetworkError =
     when (this) {
         is NetworkError -> this
         is SerializationException -> NetworkError.EncodingFailed(this)
-        is HttpRequestTimeoutException, is SocketTimeoutException -> NetworkError.Timeout
+        // ConnectTimeoutException extends ConnectException, so it must be matched before it.
+        is HttpRequestTimeoutException, is SocketTimeoutException, is ConnectTimeoutException -> NetworkError.Timeout
         is UnknownHostException, is ConnectException -> NetworkError.NoInternetConnection
         else -> NetworkError.Underlying(this)
     }
