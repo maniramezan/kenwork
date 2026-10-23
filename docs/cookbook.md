@@ -59,6 +59,11 @@ signedInProvider.close()     // cancels any pending token refresh
 repository.close()           // cancels loads only when the repository owns its scope
 ```
 
+The [authenticated-session sample](../samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/AuthenticatedSession.kt)
+returns an `AuthenticatedSession` that owns both the client and its refresh provider. Share
+`session.client` for requests and call `session.close()` on sign-out to cancel refreshes and
+prevent later requests. An explicitly supplied engine remains caller-owned and is closed separately.
+
 ## Authorization & automatic refresh
 
 ```kotlin
@@ -322,15 +327,21 @@ KenworkLogger.sink = LogSink { level, category, message, t -> Timber.log(/* ... 
 
 ## OpenTelemetry
 
-Kenwork has **no dependency on `opentelemetry-api`, any OTel SDK, or any exporter** — and never will,
-by design, since apps disagree on OTel version, SDK, and exporter. Instead it exposes generic,
-dependency-free hooks (`RequestInterceptor`, `RequestHeaderProvider`, the existing
-`NetworkEventListener`, and `LogSink`/`StructuredLogSink`) that carry enough information — timing,
-identifiers, attributes, start+end — for *your app* to build real OTel spans, metrics instruments, and
-log records. The same hooks work identically for Datadog, Sentry, or a homegrown backend; this recipe
-just illustrates the OTel case since it's the most demanding one (it also needs context propagation).
+The published kenwork modules have no OpenTelemetry dependency. Apps supply their own API, SDK,
+exporter, and `opentelemetry-extension-kotlin` versions and connect them through `RequestInterceptor`,
+`RequestHeaderProvider`, `NetworkEventListener`, and `LogSink`/`StructuredLogSink`.
+
+Use the Kotlin extension's `asContextElement()` when invoking suspending work. A raw
+`makeCurrent()` scope stores context in a thread-local and does not follow coroutine suspension
+or dispatcher changes. The [compiled tracing sample](../samples/src/main/kotlin/io/github/maniramezan/kenwork/samples/TracingInterceptor.kt)
+is tested across a dispatcher switch, on failure, and on cancellation. Its spans use the HTTP
+method as a bounded name; use stable route names if your app needs more detail.
 
 ```kotlin
+import io.opentelemetry.extension.kotlin.asContextElement
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
+
 // In *your app's* code — this is where the opentelemetry-api dependency lives, not in Kenwork.
 val tracer: Tracer = openTelemetry.getTracer("com.example.app")
 val propagator: TextMapPropagator = openTelemetry.propagators.textMapPropagator
@@ -343,15 +354,17 @@ val propagator: TextMapPropagator = openTelemetry.propagators.textMapPropagator
 val tracingInterceptor =
     object : RequestInterceptor {
         override suspend fun <T> intercept(endpoint: NetworkEndpoint, attempt: Int, proceed: suspend () -> T): T {
-            val span = tracer.spanBuilder("${endpoint.method.value} ${endpoint.path}")
+            val span = tracer.spanBuilder(endpoint.method.value)
                 .setAttribute("http.request.resend_count", attempt.toLong())
                 .startSpan()
             return try {
-                span.makeCurrent().use { proceed() }
-            } catch (t: Throwable) {
-                span.recordException(t)
+                withContext(span.asContextElement()) { proceed() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                span.recordException(error)
                 span.setStatus(StatusCode.ERROR)
-                throw t
+                throw error
             } finally {
                 span.end()
             }
