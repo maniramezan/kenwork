@@ -1,6 +1,5 @@
 package io.github.maniramezan.kenwork.repository
 
-import io.github.maniramezan.kenwork.cache.CacheChange
 import io.github.maniramezan.kenwork.cache.CacheKey
 import io.github.maniramezan.kenwork.cache.CachePolicy
 import io.github.maniramezan.kenwork.cache.shouldUseCachedData
@@ -19,8 +18,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
@@ -101,8 +100,9 @@ public class GenericRepository<E : Any>(
     }
 
     /**
-     * Emits the initial [fetch], then the re-read local value after every change affecting
-     * [cacheKey]. With [emitRemovals] a removal/clear emits `null`; otherwise it is skipped.
+     * Emits the initial [fetch], then re-reads [cacheKey] after conflated local invalidations.
+     * Every notification invalidates the read: other keys can hide a dropped update or cause an
+     * eviction in a layered cache. With [emitRemovals] a missing value emits `null`.
      */
     private fun observe(
         endpoint: NetworkEndpoint,
@@ -121,8 +121,8 @@ public class GenericRepository<E : Any>(
                 launch {
                     localDataSource
                         .changes()
-                        .filter { it.affects(cacheKey) }
                         .onStart { subscribed.complete(Unit) }
+                        .conflate()
                         .collect {
                             val current = localDataSource.read(cacheKey)
                             if (current != null || emitRemovals) {
@@ -182,10 +182,3 @@ public class GenericRepository<E : Any>(
         return result.getOrThrow()
     }
 }
-
-private fun CacheChange.affects(key: CacheKey): Boolean =
-    when (this) {
-        is CacheChange.Updated -> this.key == key
-        is CacheChange.Removed -> this.key == key
-        CacheChange.Cleared -> true
-    }

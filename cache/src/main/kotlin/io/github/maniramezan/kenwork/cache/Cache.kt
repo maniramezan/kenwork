@@ -12,8 +12,9 @@ public data class CacheEntry<V : Any>(
 /**
  * A mutation observed on a [Cache], emitted by [Cache.changes].
  *
- * Lets reactive consumers (e.g. a repository `stream`) re-read only the keys that actually
- * changed instead of polling.
+ * Describes a mutation without polling. Notifications can be dropped under load, so consumers
+ * maintaining a current value must re-read their observed keys on every notification, including
+ * notifications naming another key.
  */
 public sealed interface CacheChange {
     /** The value stored for [key] was set or replaced. */
@@ -76,9 +77,9 @@ public interface Cache<V : Any> {
      * cannot observe mutations are simply non-reactive; observable caches override this.
      *
      * Delivery is **latest-wins**: under a burst that outruns a slow collector, the oldest change
-     * notifications may be dropped, but the most recent one is retained. Consumers that re-read on
-     * each event (e.g. `Repository.stream`) therefore always converge to the current value — they
-     * may skip intermediate values, never the latest.
+     * notifications may be dropped, but the most recent one is retained. Its key can differ from
+     * a dropped notification's key. Re-read observed keys on every event, without filtering by key,
+     * to converge to current storage; intermediate values and individual notifications may be skipped.
      */
     public fun changes(): Flow<CacheChange> = emptyFlow()
 }
