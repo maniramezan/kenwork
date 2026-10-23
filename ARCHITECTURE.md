@@ -99,8 +99,10 @@ Beyond `NetworkMonitor`, the data layer is observable: `Cache.changes()` /
 `LocalDataSource.changes()` emit a `CacheChange` (`Updated`/`Removed`/`Cleared`) on every mutation
 (read-time LRU promotion does **not** emit). `Repository.stream(endpoint, key, policy)` subscribes
 to `changes()` *before* running its initial `fetch` (so a mutation landing in between isn't
-missed), then re-emits the stored value whenever the local store reports a change for that key
-(`distinctUntilChanged`), giving an offline-first single-source-of-truth stream for UIs. If a
+missed), then re-reads the observed key on every local notification (`distinctUntilChanged`),
+giving an offline-first single-source-of-truth stream for UIs. Notifications are conflated before
+reading so a write burst does not cause a read per event. Key filtering would miss dropped updates
+and evictions caused by writes to other keys, so all notifications invalidate the read. If a
 change is emitted while the initial `fetch` is still running, the fetch result is dropped: the
 change was read after it landed, so it is at least as fresh, and emitting the fetch result after it
 could leave a stale value as the stream's latest emission. If the initial `fetch` fails, the flow

@@ -15,7 +15,8 @@ import kotlinx.coroutines.sync.withLock
  * timestamp when the memory layer is a [TimestampedCache]. Writes go through to both layers.
  *
  * [changes] reflects writes and removals against this layered view; read-time promotions are not
- * reported, since the logical value did not change.
+ * reported, since the logical value did not change. A write can also evict other keys from the
+ * backing caches, so observers must re-read their keys on every notification from this view.
  *
  * Operations through this instance are serialized across both tiers, so a slow disk read cannot
  * promote stale data over a newer write or resurrect a removed entry. Access the backing caches
