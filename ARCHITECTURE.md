@@ -127,6 +127,12 @@ attempts, then resume promptly when the network returns. `ReachabilityGate` is a
 interface, so `NetworkClient` stays decoupled from any concrete connectivity source (and testable
 without one). `NetworkMonitor.awaitReachable()` exposes the same wait standalone.
 
+`MutationQueue` owns transient retries and suppresses the client's policy with `withRetryPolicy`.
+It opts into waiting on the client's configured gate before each queue attempt, retaining the
+client's time bound without multiplying retry counts. Queue admission, restoration, and
+cancellation serialize persistence under the workers mutex; cancellation removes stored records
+for the key even when no worker has been restored yet.
+
 `updateConfiguration` reference-counts the active `HttpClient`, so a config swap never closes a
 client out from under an in-flight request; the superseded client closes once its last request
 drains.

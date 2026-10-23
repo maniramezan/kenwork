@@ -123,7 +123,9 @@ public class NetworkClient(
         responseType: TypeInfo,
         startNs: Long,
     ): Any? {
-        val retryPolicy = currentCoroutineContext()[RetryPolicyOverride]?.retryPolicy ?: config.retryPolicy
+        val retryOverride = currentCoroutineContext()[RetryPolicyOverride]
+        val retryPolicy = retryOverride?.retryPolicy ?: config.retryPolicy
+        if (retryOverride?.awaitReachabilityBeforeRequest == true) awaitReachable(config)
         var attempt = 0
         while (true) {
             val mapped: NetworkError =
