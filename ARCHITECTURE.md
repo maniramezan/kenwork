@@ -138,6 +138,11 @@ first acquires the mutex and starts a single refresh `Deferred`; the rest observ
 `Deferred` and await the same result. `refreshTokenHandler` therefore runs **once** per burst.
 This mirrors SwiftyNetwork's in-flight `Task` and Novalingo's Firebase sign-in mutex.
 
+The built-in OAuth provider also compares the token rejected by a `401` with its current token
+under that mutex. A late rejection of an already-replaced token reuses the new credential without
+starting another refresh; it still joins a refresh that is currently in flight. Custom providers
+retain their existing `refreshAuthorizationIfNeeded()` contract.
+
 ### 401 refresh-and-retry
 
 `NetworkClient` resolves authorization (endpoint-level first, else the provider), sends the

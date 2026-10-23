@@ -202,7 +202,7 @@ public class NetworkClient(
 
             // Discard the 401 body so the connection is released before we retry.
             response.drainBody()
-            if (!provider.refreshAuthorizationIfNeeded()) throw NetworkError.AuthorizationRefreshFailed
+            if (!provider.refreshAfterRejection(auth)) throw NetworkError.AuthorizationRefreshFailed
             authAttempt++
             if (config.retryDelayMillis > 0) delay(config.retryDelayMillis)
         }

@@ -15,6 +15,58 @@ import kotlin.test.assertTrue
 
 class OAuthAuthorizationProviderTest {
     @Test
+    fun `a stale rejection joins a newer refresh that is still running`() =
+        runTest {
+            val refreshing = CompletableDeferred<Unit>()
+            val allowRefresh = CompletableDeferred<Unit>()
+            val calls = AtomicInteger()
+            val provider =
+                OAuthAuthorizationProvider("old") {
+                    if (calls.incrementAndGet() == 1) {
+                        "new"
+                    } else {
+                        refreshing.complete(Unit)
+                        allowRefresh.await()
+                        "newest"
+                    }
+                }
+
+            try {
+                assertTrue(provider.refreshAuthorizationIfNeeded())
+                val refresh = async { provider.refreshAuthorizationIfNeeded() }
+                refreshing.await()
+                val staleRejection = async(start = CoroutineStart.UNDISPATCHED) { provider.refreshAfterRejection("old") }
+                assertFalse(staleRejection.isCompleted)
+
+                allowRefresh.complete(Unit)
+
+                assertTrue(refresh.await())
+                assertTrue(staleRejection.await())
+                assertEquals("newest", provider.currentAccessToken())
+                assertEquals(2, calls.get())
+            } finally {
+                provider.close()
+            }
+        }
+
+    @Test
+    fun `closing a provider rejects stale-token reuse as well as refresh`() =
+        runTest {
+            val calls = AtomicInteger()
+            val provider =
+                OAuthAuthorizationProvider("old") {
+                    calls.incrementAndGet()
+                    "new"
+                }
+
+            assertTrue(provider.refreshAuthorizationIfNeeded())
+            provider.close()
+
+            assertFalse(provider.refreshAfterRejection("old"))
+            assertEquals(1, calls.get())
+        }
+
+    @Test
     fun `cancelling a waiter does not start a competing token refresh`() =
         runTest {
             val entered = CompletableDeferred<Unit>()
