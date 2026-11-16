@@ -1,6 +1,7 @@
 package io.github.maniramezan.kenwork.mutations
 
 import io.github.maniramezan.kenwork.network.ApiClient
+import io.github.maniramezan.kenwork.network.NetworkEndpoint
 import io.github.maniramezan.kenwork.network.NetworkError
 import io.github.maniramezan.kenwork.network.RetryPolicy
 import io.github.maniramezan.kenwork.network.withRetryPolicy
@@ -18,6 +19,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+
+/** [delegate] with one extra request header, used to send a mutation's idempotency key. */
+internal class IdempotentEndpoint(
+    private val delegate: NetworkEndpoint,
+    headerName: String,
+    headerValue: String,
+) : NetworkEndpoint by delegate {
+    override val headers: Map<String, String> = delegate.headers.orEmpty() + (headerName to headerValue)
+}
 
 /** One coalesced mutation, bundled with its persistence record (if any) and effective retry policy. */
 internal class Enqueued<B : Any>(
@@ -37,6 +47,7 @@ internal class KeyWorker(
     private val store: MutationStore,
     private val statusFlow: MutableStateFlow<MutationStatus?>,
     private val scope: CoroutineScope,
+    private val idempotencyKeyHeader: String? = null,
     private val onFinished: suspend (KeyWorker) -> Unit = {},
 ) {
     private val latest = MutableStateFlow<Enqueued<*>?>(null)
@@ -172,8 +183,10 @@ internal class KeyWorker(
         try {
             // The queue's retry policy is the only retry layer: a client retrying underneath it
             // would multiply attempts (3 queue attempts x 3 client attempts by default).
+            val mutation = active.mutation
+            val endpoint = idempotencyKeyHeader?.let { IdempotentEndpoint(mutation.endpoint, it, mutation.id) } ?: mutation.endpoint
             withRetryPolicy(RetryPolicy.None, awaitReachabilityBeforeRequest = true) {
-                apiClient.request<Unit>(active.mutation.endpoint, active.mutation.body, active.mutation.bodyType, typeInfo<Unit>())
+                apiClient.request<Unit>(endpoint, mutation.body, mutation.bodyType, typeInfo<Unit>())
             }
             null
         } catch (error: CancellationException) {

@@ -5,10 +5,21 @@ public final class io/github/maniramezan/kenwork/mutations/DecodedMutation {
 	public final fun getEndpoint ()Lio/github/maniramezan/kenwork/network/NetworkEndpoint;
 }
 
+public final class io/github/maniramezan/kenwork/mutations/FileMutationStore : io/github/maniramezan/kenwork/mutations/MutationStore {
+	public fun <init> (Ljava/io/File;Lkotlin/coroutines/CoroutineContext;)V
+	public synthetic fun <init> (Ljava/io/File;Lkotlin/coroutines/CoroutineContext;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun clear (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun loadAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun remove (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeByKey (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun save (Lio/github/maniramezan/kenwork/mutations/MutationRecord;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public final class io/github/maniramezan/kenwork/mutations/InMemoryMutationStore : io/github/maniramezan/kenwork/mutations/MutationStore {
 	public fun <init> ()V
 	public fun loadAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun remove (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeByKey (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun save (Lio/github/maniramezan/kenwork/mutations/MutationRecord;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
@@ -44,8 +55,10 @@ public final class io/github/maniramezan/kenwork/mutations/MutationKey$Companion
 }
 
 public final class io/github/maniramezan/kenwork/mutations/MutationQueue {
-	public fun <init> (Lio/github/maniramezan/kenwork/network/ApiClient;Lkotlinx/coroutines/CoroutineScope;Lio/github/maniramezan/kenwork/mutations/MutationStore;Lio/github/maniramezan/kenwork/network/RetryPolicy;ILjava/util/List;)V
+	public synthetic fun <init> (Lio/github/maniramezan/kenwork/network/ApiClient;Lkotlinx/coroutines/CoroutineScope;Lio/github/maniramezan/kenwork/mutations/MutationStore;Lio/github/maniramezan/kenwork/network/RetryPolicy;ILjava/util/List;)V
 	public synthetic fun <init> (Lio/github/maniramezan/kenwork/network/ApiClient;Lkotlinx/coroutines/CoroutineScope;Lio/github/maniramezan/kenwork/mutations/MutationStore;Lio/github/maniramezan/kenwork/network/RetryPolicy;ILjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/maniramezan/kenwork/network/ApiClient;Lkotlinx/coroutines/CoroutineScope;Lio/github/maniramezan/kenwork/mutations/MutationStore;Lio/github/maniramezan/kenwork/network/RetryPolicy;ILjava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Lio/github/maniramezan/kenwork/network/ApiClient;Lkotlinx/coroutines/CoroutineScope;Lio/github/maniramezan/kenwork/mutations/MutationStore;Lio/github/maniramezan/kenwork/network/RetryPolicy;ILjava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Lio/github/maniramezan/kenwork/network/ApiClient;Lkotlinx/coroutines/CoroutineScope;Lio/github/maniramezan/kenwork/mutations/MutationStore;Lio/github/maniramezan/kenwork/network/RetryPolicy;Ljava/util/List;)V
 	public synthetic fun <init> (Lio/github/maniramezan/kenwork/network/ApiClient;Lkotlinx/coroutines/CoroutineScope;Lio/github/maniramezan/kenwork/mutations/MutationStore;Lio/github/maniramezan/kenwork/network/RetryPolicy;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun cancel-kLDCSmQ (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -139,7 +152,12 @@ public final class io/github/maniramezan/kenwork/mutations/MutationStatus$Succee
 public abstract interface class io/github/maniramezan/kenwork/mutations/MutationStore {
 	public abstract fun loadAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun remove (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeByKey (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun save (Lio/github/maniramezan/kenwork/mutations/MutationRecord;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/maniramezan/kenwork/mutations/MutationStore$DefaultImpls {
+	public static fun removeByKey (Lio/github/maniramezan/kenwork/mutations/MutationStore;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/github/maniramezan/kenwork/mutations/QueuedMutation {
