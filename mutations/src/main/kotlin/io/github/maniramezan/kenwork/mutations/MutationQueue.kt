@@ -63,6 +63,11 @@ import java.util.concurrent.ConcurrentHashMap
  * @param codecs [MutationCodec]s to register upfront, so [restore] can decode their records even
  *   before any matching [enqueue] call runs in this process. Enqueueing with a new codec also
  *   registers it.
+ * @param idempotencyKeyHeader when set (typically `"Idempotency-Key"`), every attempt of a mutation
+ *   sends this header with the mutation's id ([MutationHandle.id], or [MutationRecord.id] after
+ *   [restore]). Retries and replays after a restart reuse the id, so a server that deduplicates on
+ *   it applies the write once even when a timeout hid an earlier success. A coalesced replacement
+ *   is a new desired state and gets a new id. `null` (the default) sends no header.
  */
 public class MutationQueue(
     private val apiClient: ApiClient,
@@ -71,6 +76,7 @@ public class MutationQueue(
     private val defaultRetryPolicy: RetryPolicy = DefaultRetryPolicy(retryNonIdempotent = true),
     private val maxStatuses: Int = 64,
     codecs: List<MutationCodec<*>> = emptyList(),
+    private val idempotencyKeyHeader: String? = null,
 ) {
     init {
         require(maxStatuses > 0) { "maxStatuses must be positive, got $maxStatuses" }
@@ -84,7 +90,13 @@ public class MutationQueue(
     private val statuses = LinkedHashMap<MutationKey, MutableStateFlow<MutationStatus?>>(INITIAL_STATUS_CAPACITY, LOAD_FACTOR, true)
 
     private val workers = ConcurrentHashMap<MutationKey, KeyWorker>()
-    private val workersMutex = Mutex()
+
+    /**
+     * Admission locks, striped by key: enqueue, cancel, and worker cleanup for one key are
+     * serialized with that key's persistence, while a slow store call for one key does not hold up
+     * others. [restore] takes every stripe.
+     */
+    private val admissionStripes = Array(ADMISSION_STRIPES) { Mutex() }
 
     /**
      * The current/most recent [MutationStatus] for [key], or `null` if nothing has ever been
@@ -104,9 +116,9 @@ public class MutationQueue(
      * new [MutationStatus] subclass that would break consumers with exhaustive `when` expressions.
      */
     public suspend fun cancel(key: MutationKey) {
-        workersMutex.withLock {
+        admissionLock(key).withLock {
             workers.remove(key)?.cancel()
-            store.loadAll().filter { it.key == key.value }.forEach { store.remove(it.id) }
+            store.removeByKey(key.value)
             // Reset rather than remove the flow: observers that already hold it must keep seeing
             // updates from later enqueues under the same key.
             synchronized(statuses) { statuses[key]?.value = null }
@@ -146,7 +158,7 @@ public class MutationQueue(
                     enqueuedAtMillis = System.currentTimeMillis(),
                 )
             }
-        workersMutex.withLock {
+        admissionLock(key).withLock {
             record?.let { store.save(it) }
             workerFor(key).submit(Enqueued(mutation, record, retryPolicy ?: defaultRetryPolicy))
         }
@@ -163,7 +175,7 @@ public class MutationQueue(
      * untouched in [store] (so a later app version that registers the codec can still recover them).
      */
     public suspend fun restore() {
-        workersMutex.withLock {
+        withAllAdmissionLocks {
             store
                 .loadAll()
                 .groupBy(MutationRecord::key)
@@ -225,18 +237,54 @@ public class MutationQueue(
 
     private fun workerFor(key: MutationKey): KeyWorker =
         workers.getOrPut(key) {
-            KeyWorker(apiClient, store, statusFlowFor(key), scope) { finishedWorker ->
-                workersMutex.withLock {
+            KeyWorker(apiClient, store, statusFlowFor(key), scope, idempotencyKeyHeader) { finishedWorker ->
+                admissionLock(key).withLock {
                     if (finishedWorker.isIdle()) workers.remove(key, finishedWorker)
                     synchronized(statuses) { trimStatuses() }
                 }
             }
         }
 
+    private fun admissionLock(key: MutationKey): Mutex = admissionStripes[Math.floorMod(key.hashCode(), ADMISSION_STRIPES)]
+
+    /** Runs [block] holding every admission stripe, acquired in index order so callers cannot deadlock. */
+    private suspend fun withAllAdmissionLocks(block: suspend () -> Unit) {
+        val acquired = ArrayList<Mutex>(ADMISSION_STRIPES)
+        try {
+            for (stripe in admissionStripes) {
+                stripe.lock()
+                acquired += stripe
+            }
+            block()
+        } finally {
+            acquired.asReversed().forEach { it.unlock() }
+        }
+    }
+
     private companion object {
         private const val INITIAL_STATUS_CAPACITY = 16
         private const val LOAD_FACTOR = 0.75f
+        private const val ADMISSION_STRIPES = 32
     }
+
+    /** Binary-compatibility shim for callers compiled before `idempotencyKeyHeader` was introduced. */
+    @Deprecated("Binary-compatibility shim; use the primary constructor.", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        apiClient: ApiClient,
+        scope: CoroutineScope,
+        store: MutationStore = InMemoryMutationStore(),
+        defaultRetryPolicy: RetryPolicy = DefaultRetryPolicy(retryNonIdempotent = true),
+        maxStatuses: Int = 64,
+        codecs: List<MutationCodec<*>> = emptyList(),
+    ) : this(
+        apiClient = apiClient,
+        scope = scope,
+        store = store,
+        defaultRetryPolicy = defaultRetryPolicy,
+        maxStatuses = maxStatuses,
+        codecs = codecs,
+        idempotencyKeyHeader = null,
+    )
 
     /** Binary-compatibility shim for callers compiled before [maxStatuses] was introduced. */
     @Deprecated("Binary-compatibility shim; use primary constructor with maxStatuses.", level = DeprecationLevel.HIDDEN)
