@@ -295,4 +295,36 @@ class FileSystemCacheTest {
             )
         assertTrue(FileSystemCache::class.java.declaredConstructors.any { it.parameterTypes.toList() == expected })
     }
+
+    @Test
+    fun `removeExpiredEntries deletes only entries older than the max age`() =
+        runTest {
+            var now = 1_000L
+            val cache = cache { now }
+            val stale = CacheKey("stale")
+            val fresh = CacheKey("fresh")
+            cache.setValue("old", stale)
+            now = 5_000L
+            cache.setValue("new", fresh)
+            val changes = mutableListOf<CacheChange>()
+            val collector = launch(UnconfinedTestDispatcher(testScheduler)) { cache.changes().collect { changes += it } }
+
+            now = 6_500L
+            cache.removeExpiredEntries(maxAgeMillis = 2_000L)
+
+            assertNull(cache.value(stale))
+            assertEquals("new", cache.value(fresh))
+            assertEquals(listOf<CacheChange>(CacheChange.Removed(stale)), changes)
+            collector.cancel()
+        }
+
+    @Test
+    fun `removeExpiredEntries purges expired files written by an earlier instance`() =
+        runTest {
+            cache { 1_000L }.setValue("old", key)
+            val reopened = cache { 10_000L }
+            reopened.removeExpiredEntries(maxAgeMillis = 1_000L)
+            assertTrue(dir.listFiles().orEmpty().none { it.name.endsWith(".kenc") })
+            assertNull(reopened.value(key))
+        }
 }
