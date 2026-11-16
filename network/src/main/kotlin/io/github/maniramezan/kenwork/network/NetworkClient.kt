@@ -1,6 +1,7 @@
 package io.github.maniramezan.kenwork.network
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
@@ -225,6 +226,7 @@ public class NetworkClient(
                 takeFrom(endpoint.resolvedUrl())
                 endpoint.queryItems?.forEach { (name, value) -> parameters.append(name, value) }
             }
+            endpoint.timeoutMillis?.let { timeout { requestTimeoutMillis = it } }
             endpoint.headers?.forEach { (name, value) -> header(name, value) }
             headerProvider?.headersFor(endpoint, attempt)?.forEach { (name, value) ->
                 // Replace rather than append, so a provider-supplied header (e.g. a fresh

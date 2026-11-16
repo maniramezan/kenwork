@@ -30,9 +30,13 @@ public val DefaultKenworkJson: Json =
  *   External retry loops can also wait before each request with [withRetryPolicy]'s
  *   `awaitReachabilityBeforeRequest` option; `MutationQueue` enables it automatically.
  * @property reachabilityWaitMillis cap on how long a single retry waits on [reachabilityGate].
- * @property timeoutMillis per-request timeout.
+ * @property timeoutMillis per-request timeout, covering the whole call. An endpoint can override it
+ *   with [NetworkEndpoint.timeoutMillis].
  * @property retryDelayMillis delay between a successful refresh and the retry.
- * @property logLevel verbosity of the Ktor request logger.
+ * @property logLevel verbosity of the Ktor request logger. [LogLevel.INFO] logs request and
+ *   response lines, [LogLevel.DEBUG] adds headers and bodies, and anything lower installs no request
+ *   logger. Lines are sent to [KenworkLogger.debug], so [KenworkLogger.level] must also be
+ *   [LogLevel.DEBUG] for them to reach the sink.
  * @property engineInterceptors OkHttp interceptors (e.g. an APITrace recorder) added to the engine.
  * @property okHttpConfig escape hatch to configure the underlying [OkHttpClient.Builder] directly
  *   (e.g. to install a bootstrap that needs the builder). Ignored when [engine] is set.
@@ -48,6 +52,11 @@ public val DefaultKenworkJson: Json =
  *   [RequestHeaderProvider]) — the place to inject trace-propagation headers (e.g. `traceparent`)
  *   read from whatever context the request interceptor made current for that attempt. `null` (the
  *   default) adds no headers.
+ * @property connectTimeoutMillis cap on establishing a connection. `null` (the default) keeps the
+ *   engine's own setting (10 seconds for OkHttp, or whatever [okHttpConfig] sets); a value here
+ *   takes precedence over [okHttpConfig].
+ * @property socketTimeoutMillis cap on the gap between two data packets while sending or
+ *   receiving. `null` (the default) keeps the engine's own setting, as for [connectTimeoutMillis].
  */
 public class NetworkClientConfiguration(
     public val json: Json = DefaultKenworkJson,
@@ -67,7 +76,58 @@ public class NetworkClientConfiguration(
     public val eventListener: NetworkEventListener? = null,
     public val requestInterceptor: RequestInterceptor? = null,
     public val requestHeaderProvider: RequestHeaderProvider? = null,
+    public val connectTimeoutMillis: Long? = null,
+    public val socketTimeoutMillis: Long? = null,
 ) {
+    /**
+     * Binary-compatibility shim: 0.4–0.5 consumers compiled against the constructor without the
+     * connect/socket timeout parameters link against this exact parameter list (and its
+     * default-argument bridge). Hidden from new source, which resolves to the primary constructor.
+     */
+    @Deprecated(
+        "Binary-compatibility shim for 0.4–0.5 callers; use the primary constructor.",
+        level = DeprecationLevel.HIDDEN,
+    )
+    public constructor(
+        json: Json = DefaultKenworkJson,
+        authorizationProvider: AuthorizationProvider? = null,
+        maxAuthRefreshAttempts: Int = 1,
+        retryPolicy: RetryPolicy = DefaultRetryPolicy(),
+        reachabilityGate: ReachabilityGate? = null,
+        reachabilityWaitMillis: Long = DEFAULT_REACHABILITY_WAIT_MILLIS,
+        timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+        retryDelayMillis: Long = DEFAULT_RETRY_DELAY_MILLIS,
+        logLevel: LogLevel = LogLevel.WARNING,
+        engineInterceptors: List<Interceptor> = emptyList(),
+        okHttpConfig: (OkHttpClient.Builder.() -> Unit)? = null,
+        okHttpCache: Cache? = null,
+        sslPinning: SslPinningConfiguration? = null,
+        engine: HttpClientEngine? = null,
+        eventListener: NetworkEventListener? = null,
+        requestInterceptor: RequestInterceptor? = null,
+        requestHeaderProvider: RequestHeaderProvider? = null,
+    ) : this(
+        json = json,
+        authorizationProvider = authorizationProvider,
+        maxAuthRefreshAttempts = maxAuthRefreshAttempts,
+        retryPolicy = retryPolicy,
+        reachabilityGate = reachabilityGate,
+        reachabilityWaitMillis = reachabilityWaitMillis,
+        timeoutMillis = timeoutMillis,
+        retryDelayMillis = retryDelayMillis,
+        logLevel = logLevel,
+        engineInterceptors = engineInterceptors,
+        okHttpConfig = okHttpConfig,
+        okHttpCache = okHttpCache,
+        sslPinning = sslPinning,
+        engine = engine,
+        eventListener = eventListener,
+        requestInterceptor = requestInterceptor,
+        requestHeaderProvider = requestHeaderProvider,
+        connectTimeoutMillis = null,
+        socketTimeoutMillis = null,
+    )
+
     /**
      * Binary-compatibility shim: pre-0.4 consumers compiled against the constructor without
      * the observability-hook parameters matched a JVM constructor (and
@@ -116,8 +176,13 @@ public class NetworkClientConfiguration(
     )
 
     public companion object {
+        /** Default for [timeoutMillis]: 30 seconds for the whole request. */
         public const val DEFAULT_TIMEOUT_MILLIS: Long = 30_000
+
+        /** Default for [retryDelayMillis]: 1 second between a successful refresh and the retry. */
         public const val DEFAULT_RETRY_DELAY_MILLIS: Long = 1_000
+
+        /** Default for [reachabilityWaitMillis]: each wait on [reachabilityGate] is capped at 30 seconds. */
         public const val DEFAULT_REACHABILITY_WAIT_MILLIS: Long = 30_000
     }
 }
