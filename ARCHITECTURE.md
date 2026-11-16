@@ -2,7 +2,8 @@
 
 kenwork mirrors [SwiftyNetwork](https://github.com/maniramezan/SwiftyNetwork)'s design in
 idiomatic Kotlin. "Parity" means the two libraries expose the same concepts — not a shared
-binary. The established endpoint/auth/cache/repository stack targets Android on Ktor + OkHttp.
+binary. The established endpoint/auth/cache/repository stack targets Android and the desktop JVM
+on Ktor + OkHttp.
 The separate `:network-core` module shares a small Ktor client policy across Android, JVM/Desktop,
 and iOS. Swift applications can keep using SwiftyNetwork; kenwork does not contain Swift APIs.
 
@@ -84,7 +85,8 @@ a serialization dependency by taking caller-supplied `encode`/`decode` lambdas (
 `kotlinx.serialization`), runs file I/O on an injectable context, and reads a corrupt file back as
 `null` rather than throwing. `LayeredCache.setValue` writes the persistent layer **before** memory,
 so a failed durable write (disk full, IO error) can't leave memory holding a value the disk layer
-never actually persisted.
+never actually persisted. Its lock is striped by key: operations on one key stay serialized across
+both tiers, while a slow disk read for one key does not block memory hits for other keys.
 
 ### Atomic cache reads
 
@@ -162,7 +164,12 @@ up to `maxAuthRefreshAttempts` (default 1). If refresh fails it throws
 
 The OkHttp engine lets kenwork reuse a mature ecosystem directly: `Interceptor`s (e.g. an APITrace
 recorder), the 304-aware disk `Cache`, and `CertificatePinner` for pinning. Those integrations remain
-in `:network`. `:network-core` provides a smaller KMP surface with no fixed engine dependency.
+in `:network`. `:network`, `:cache`, `:repository`, `:mutations`, and `:testing` are KMP modules
+with Android and JVM targets that share `commonMain`. Because both targets are JVM-based,
+`commonMain` uses JDK APIs (`java.io.File`, `MessageDigest`) directly; only Android SDK code
+(`NetworkMonitor`, `AndroidLogSink`) lives in `androidMain`, and `KenworkLogger`'s default sink is
+an internal `expect`/`actual`. `:network-core` provides a smaller KMP surface, including iOS, with
+no fixed engine dependency.
 Moving more behavior into shared code requires an explicit contract for platform-specific
 connectivity, persistence, TLS, and lifecycle management. See [platforms.md](docs/platforms.md)
 for the current boundary and guidance for extending it without duplicating public APIs.
@@ -175,9 +182,11 @@ dependency**. Consumers construct objects directly or wire them with their own D
 
 ## Testing
 
-`MockEngine` (via the `:testing` module) drives `NetworkClient` with no sockets. Robolectric covers
-`NetworkMonitor`. The build enforces a JaCoCo line-coverage gate on the established Android library
-modules; the KMP core is outside that gate.
+`MockEngine` (via the `:testing` module) drives `NetworkClient` with no sockets. Shared code is tested
+in `jvmTest`; Android host tests (`androidHostTest`, under Robolectric) cover `NetworkMonitor` and
+`AndroidLogSink`. The build enforces a JaCoCo line-coverage gate on `jvmTest` for `:network`,
+`:cache`, `:repository`, and `:mutations`, so `androidMain`-only code is outside it, as is the KMP
+core. ABI dumps are checked per target (`api/android`, `api/jvm`).
 Unit tests run on a Java 21 toolchain (Robolectric + compileSdk 37 require it).
 
 The `:testing` module ships doubles for consumers: `mockNetworkClient` (a `NetworkClient` over

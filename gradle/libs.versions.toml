@@ -70,3 +70,4 @@ android-bcv-bridge = { id = "io.github.tjokinen.android-bcv-bridge", version.ref
 # Convention plugins (defined in build-logic)
 kenwork-android-library = { id = "kenwork.android.library" }
 kenwork-kotlin-library = { id = "kenwork.kotlin.library" }
+kenwork-kmp-library = { id = "kenwork.kmp.library" }

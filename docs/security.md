@@ -33,6 +33,8 @@ and header providers are application code and must apply their own redaction rul
 `FileSystemCache` hashes filenames but writes encoded values as plaintext. Use application-private
 storage, choose what is safe to persist, and provide encryption in the storage/codec layer when
 required. Namespace cache keys by account or tenant and clear account-specific caches on sign-out.
+`okHttpCache` stores raw HTTP responses on disk, including responses to authenticated requests the
+server marks cacheable; give it a private directory and call `evictAll()` on sign-out.
 Repository requests coalesce by cache key, so keys must also distinguish endpoint parameters and
 authorization context whenever the returned data differs.
 

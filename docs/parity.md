@@ -65,3 +65,5 @@ These leverage Kotlin/coroutines idioms and have no required SwiftyNetwork count
 - **Error helpers:** `NetworkError.httpStatusCode` exposes the status carried by any error case.
 - **KMP core:** `:network-core` (`KenworkHttpClient`) shares a JSON/redirect client policy across
   Android, JVM/Desktop, and iOS.
+- **Desktop JVM:** every module except `:samples` also publishes a JVM artifact; only
+  `NetworkMonitor` remains Android-only.
