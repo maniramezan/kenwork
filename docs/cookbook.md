@@ -82,8 +82,9 @@ val client = NetworkClient(NetworkClientConfiguration(
 ```
 
 `okHttpConfig`, `engineInterceptors`, `okHttpCache`, and `sslPinning` apply only to the built-in
-OkHttp engine. They are ignored when you pass `engine`. Timeouts are per client, not per endpoint:
-use a second client for long uploads or long polls.
+OkHttp engine. They are ignored when you pass `engine`. Client timeouts default to whole-request
+`timeoutMillis`, with optional `connectTimeoutMillis` and `socketTimeoutMillis`; individual endpoints
+can override the request timeout via `NetworkEndpoint.timeoutMillis`.
 
 ## Client lifecycle
 
@@ -170,12 +171,13 @@ val disk = FileSystemCache(
 // Two-tier: memory over the disk cache, promoting hits with their original timestamp.
 val layered = LayeredCache(memory = InMemoryCache<Video>(maxSize = 100), persistent = disk)
 
-// Drop memory entries older than an hour, e.g. from a periodic job. Observers get CacheChange.Removed.
-cache.removeExpiredEntries(maxAgeMillis = 60 * 60 * 1000L)
+// Drop entries older than an hour, e.g. from a periodic job. Observers get CacheChange.Removed.
+// Supported on both InMemoryCache and FileSystemCache:
+memoryCache.removeExpiredEntries(maxAgeMillis = 60 * 60 * 1000L)
+disk.removeExpiredEntries(maxAgeMillis = 24 * 60 * 60 * 1000L)
 ```
 
-`FileSystemCache` has no age-based purge: old files stay until size eviction or `removeAll()`.
-A repository using `CachePolicy.ReturnCacheIfNotExpired` skips them on read and reloads.
+A repository using `CachePolicy.ReturnCacheIfNotExpired` skips expired entries on read and reloads.
 
 ### HTTP caching (`Cache-Control` / `ETag`)
 
@@ -363,39 +365,17 @@ queue.restore()   // replays whatever didn't finish before the process died
 restore, and cancellation serialize queue admission with persistence so a concurrent operation
 cannot replay a cancelled snapshot afterwards.
 
-`InMemoryMutationStore` is the shipped default and does not survive process death. Implement
-`MutationStore` (three suspend functions over the `@Serializable` `MutationRecord`) for real
-durability. Room, SQLDelight, or DataStore all work; for a handful of pending writes, a single JSON
-file is enough:
+`InMemoryMutationStore` is the default in-process store and does not survive process death. For
+durability across app restarts, `:mutations` ships `FileMutationStore`:
 
 ```kotlin
-class FileMutationStore(private val file: File) : MutationStore {
-    private val mutex = Mutex()
-    private val serializer = ListSerializer(MutationRecord.serializer())
-
-    override suspend fun save(record: MutationRecord) = update { it.filterNot { r -> r.id == record.id } + record }
-
-    override suspend fun remove(id: String) = update { it.filterNot { r -> r.id == id } }
-
-    override suspend fun loadAll(): List<MutationRecord> = mutex.withLock { withContext(Dispatchers.IO) { read() } }
-
-    /** Not part of MutationStore: call it on sign-out. */
-    suspend fun clear() = mutex.withLock { withContext(Dispatchers.IO) { file.delete() } }
-
-    private suspend fun update(change: (List<MutationRecord>) -> List<MutationRecord>) =
-        mutex.withLock {
-            withContext(Dispatchers.IO) {
-                val temporary = File(file.parentFile, "${file.name}.tmp")
-                temporary.writeText(Json.encodeToString(serializer, change(read())))
-                // Atomic replace: a crash leaves either the old or the new list, never half of one.
-                Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            }
-        }
-
-    private fun read(): List<MutationRecord> =
-        if (file.exists()) runCatching { Json.decodeFromString(serializer, file.readText()) }.getOrDefault(emptyList()) else emptyList()
-}
+val store = FileMutationStore(file = File(context.filesDir, "kenwork/mutations.json"))
+val queue = MutationQueue(apiClient = client, scope = appScope, store = store, codecs = listOf(SetLikeStateCodec))
 ```
+
+`FileMutationStore` caches loaded records in memory, performs atomic file replacements on every write,
+and provides a `clear()` method to purge persisted records on sign-out. For databases (e.g. Room or SQLDelight),
+implement `MutationStore` directly (three suspend functions over the `@Serializable` `MutationRecord`).
 
 Keep the file in app-private storage, and delete it on sign-out (see below). Records hold
 whatever your codec encodes, so never put credentials in a payload.
