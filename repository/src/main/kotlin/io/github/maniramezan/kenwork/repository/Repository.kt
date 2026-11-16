@@ -54,10 +54,23 @@ public interface Repository<E : Any> {
 // Kept in this file (not GenericRepository.kt): moving a public top-level function changes its JVM
 // facade class (`RepositoryKt`), which is part of the published ABI.
 
-/** Reified factory capturing the response [io.ktor.util.reflect.TypeInfo] for [GenericRepository]. */
+/**
+ * Reified factory capturing the response [io.ktor.util.reflect.TypeInfo] for [GenericRepository].
+ * See [GenericRepository] for [scope] and [serveStaleOnError].
+ */
 public inline fun <reified E : Any> GenericRepository(
     networkDataSource: NetworkDataSource,
     localDataSource: LocalDataSource<E>,
     noinline currentTimeMillis: () -> Long = System::currentTimeMillis,
     scope: CoroutineScope? = null,
-): GenericRepository<E> = GenericRepository(networkDataSource, localDataSource, typeInfo<E>(), currentTimeMillis, scope)
+    serveStaleOnError: Boolean = false,
+): GenericRepository<E> = GenericRepository(networkDataSource, localDataSource, typeInfo<E>(), currentTimeMillis, scope, serveStaleOnError)
+
+/** Binary-compatibility shim for callers compiled before `serveStaleOnError` existed. */
+@Deprecated("Binary-compatibility shim; use the overload with serveStaleOnError.", level = DeprecationLevel.HIDDEN)
+public inline fun <reified E : Any> GenericRepository(
+    networkDataSource: NetworkDataSource,
+    localDataSource: LocalDataSource<E>,
+    noinline currentTimeMillis: () -> Long = System::currentTimeMillis,
+    scope: CoroutineScope? = null,
+): GenericRepository<E> = GenericRepository(networkDataSource, localDataSource, typeInfo<E>(), currentTimeMillis, scope, false)
