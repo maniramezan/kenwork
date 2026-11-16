@@ -11,10 +11,13 @@ import kotlinx.coroutines.sync.withLock
  * and [loadAll] on [MutationQueue.restore] to replay whatever didn't finish before the process
  * died.
  *
- * [InMemoryMutationStore] is the shipped default — it does not survive process death. To make
- * queued mutations durable, implement this interface backed by SQLDelight, Room, DataStore, or
- * even a flat file: every [MutationRecord] field is a primitive/string, so any of those work
- * without extra serialization glue.
+ * [InMemoryMutationStore] is the shipped default — it does not survive process death.
+ * [FileMutationStore] is a durable store backed by one JSON file. You can also implement this
+ * interface over SQLDelight, Room, or DataStore: every [MutationRecord] field is a primitive or
+ * string, so any of those work without extra serialization glue.
+ *
+ * Implementations must be safe for concurrent calls: the queue serializes work per key, so calls
+ * for different keys can overlap.
  */
 public interface MutationStore {
     /** Persists (or overwrites) [record]. */
@@ -25,6 +28,16 @@ public interface MutationStore {
 
     /** All currently persisted records, in no particular order. */
     public suspend fun loadAll(): List<MutationRecord>
+
+    /**
+     * Removes every record whose [MutationRecord.key] is [key]. [MutationQueue.cancel] calls it.
+     *
+     * The default loads every record and removes the matches one by one; override it when the
+     * backing store can delete by key directly (for example `DELETE ... WHERE key = ?`).
+     */
+    public suspend fun removeByKey(key: String) {
+        loadAll().filter { it.key == key }.forEach { remove(it.id) }
+    }
 }
 
 /**
@@ -46,4 +59,8 @@ public class InMemoryMutationStore : MutationStore {
     }
 
     override suspend fun loadAll(): List<MutationRecord> = mutex.withLock { records.values.toList() }
+
+    override suspend fun removeByKey(key: String) {
+        mutex.withLock { records.values.removeAll { it.key == key } }
+    }
 }
