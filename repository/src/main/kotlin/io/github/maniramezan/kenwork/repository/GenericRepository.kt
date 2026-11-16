@@ -5,6 +5,8 @@ import io.github.maniramezan.kenwork.cache.CachePolicy
 import io.github.maniramezan.kenwork.cache.shouldUseCachedData
 import io.github.maniramezan.kenwork.network.NetworkDataSource
 import io.github.maniramezan.kenwork.network.NetworkEndpoint
+import io.github.maniramezan.kenwork.network.NetworkError
+import io.github.maniramezan.kenwork.network.isTransient
 import io.ktor.util.reflect.TypeInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -35,6 +37,12 @@ import kotlinx.coroutines.sync.withLock
  * cache triggers a single network request whose result they all await — the same single-flight
  * pattern the network layer uses for token refresh.
  *
+ * @param serveStaleOnError when `true`, a network load that fails transiently (see
+ *   [NetworkError.isTransient]: timeouts, lost connectivity, `429`, `5xx`) returns the value already
+ *   stored under the key instead of throwing, if there is one. This applies whenever the policy
+ *   forced a reload despite a cached value: an expired entry under
+ *   [CachePolicy.ReturnCacheIfNotExpired], or any entry under [CachePolicy.ReloadIgnoringCache].
+ *   Other failures still throw. Defaults to `false`.
  * @param scope coroutine scope hosting the coalesced loads. Pass your own to tie loads to a
  *   lifecycle you control; when omitted, an internal `SupervisorJob` on [Dispatchers.Default] is
  *   created and [close] cancels it. [close] never cancels a scope you supplied, and a failed load
@@ -49,7 +57,18 @@ public class GenericRepository<E : Any>(
     private val responseType: TypeInfo,
     private val currentTimeMillis: () -> Long = System::currentTimeMillis,
     scope: CoroutineScope? = null,
+    private val serveStaleOnError: Boolean = false,
 ) : Repository<E> {
+    /** Binary-compatibility shim for callers compiled before `serveStaleOnError` existed. */
+    @Deprecated("Binary-compatibility shim; use the primary constructor.", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        networkDataSource: NetworkDataSource,
+        localDataSource: LocalDataSource<E>,
+        responseType: TypeInfo,
+        currentTimeMillis: () -> Long = System::currentTimeMillis,
+        scope: CoroutineScope? = null,
+    ) : this(networkDataSource, localDataSource, responseType, currentTimeMillis, scope, serveStaleOnError = false)
+
     private val ownsScope: Boolean = scope == null
     private val coalesceScope: CoroutineScope = scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val inFlightMutex = Mutex()
@@ -61,7 +80,7 @@ public class GenericRepository<E : Any>(
         policy: CachePolicy,
     ): E =
         when (policy) {
-            CachePolicy.ReloadIgnoringCache -> loadAndStore(endpoint, cacheKey)
+            CachePolicy.ReloadIgnoringCache -> loadOrStale(endpoint, cacheKey)
             CachePolicy.ReturnCacheElseLoad ->
                 localDataSource.read(cacheKey) ?: loadAndStore(endpoint, cacheKey)
             is CachePolicy.ReturnCacheIfNotExpired -> {
@@ -71,7 +90,7 @@ public class GenericRepository<E : Any>(
                 ) {
                     cached.value
                 } else {
-                    loadAndStore(endpoint, cacheKey)
+                    loadOrStale(endpoint, cacheKey)
                 }
             }
         }
@@ -141,6 +160,18 @@ public class GenericRepository<E : Any>(
             sendLock.withLock { if (!changeEmitted) send(initial) }
             changesJob.join()
         }.distinctUntilChanged()
+
+    /** [loadAndStore], falling back to the stored value on a transient failure when enabled. */
+    private suspend fun loadOrStale(
+        endpoint: NetworkEndpoint,
+        cacheKey: CacheKey,
+    ): E =
+        try {
+            loadAndStore(endpoint, cacheKey)
+        } catch (error: NetworkError) {
+            if (!serveStaleOnError || !error.isTransient()) throw error
+            localDataSource.read(cacheKey) ?: throw error
+        }
 
     private suspend fun loadAndStore(
         endpoint: NetworkEndpoint,
