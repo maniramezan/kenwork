@@ -135,6 +135,7 @@ public final class io/github/maniramezan/kenwork/cache/FileSystemCache : io/gith
 	public fun changes ()Lkotlinx/coroutines/flow/Flow;
 	public fun entry (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeAll (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun removeExpiredEntries (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeValue (Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun setValue (Ljava/lang/Object;Lio/github/maniramezan/kenwork/cache/CacheKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
