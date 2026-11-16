@@ -1,5 +1,7 @@
 package io.github.maniramezan.kenwork.network
 
+import io.ktor.http.Url
+
 /**
  * A type-safe description of one HTTP endpoint. Mirrors SwiftyNetwork's `NetworkEndpoint`.
  *
@@ -27,6 +29,13 @@ public interface NetworkEndpoint {
 
     /** A raw request body, or `null`. Ignored when a typed body is passed to the client. */
     public val body: ByteArray? get() = null
+
+    /**
+     * A request timeout for this endpoint in milliseconds, replacing
+     * [NetworkClientConfiguration.timeoutMillis] for it (e.g. a long upload or a long poll), or
+     * `null` to use the client's.
+     */
+    public val timeoutMillis: Long? get() = null
 }
 
 /**
@@ -34,6 +43,16 @@ public interface NetworkEndpoint {
  * regardless of how either side is punctuated. Matches SwiftyNetwork's URL normalization.
  */
 internal fun NetworkEndpoint.resolvedUrl(): String {
+    val joined = joinedUrl()
+    // Ktor's parser is lenient: without a scheme it treats the whole string as a path on a default
+    // host, so a missing scheme would silently send the request somewhere else.
+    val hasHttpScheme = joined.startsWith("http://", ignoreCase = true) || joined.startsWith("https://", ignoreCase = true)
+    val host = runCatching { Url(joined).host }.getOrNull()
+    if (!hasHttpScheme || host.isNullOrEmpty()) throw NetworkError.InvalidUrl(joined)
+    return joined
+}
+
+private fun NetworkEndpoint.joinedUrl(): String {
     val base = baseUrl.trimEnd('/')
     val trimmedPath = path.trimStart('/')
     return if (trimmedPath.isEmpty()) base else "$base/$trimmedPath"
