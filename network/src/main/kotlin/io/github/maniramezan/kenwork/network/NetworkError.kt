@@ -10,15 +10,23 @@ public sealed class NetworkError(
     message: String,
     cause: Throwable? = null,
 ) : Exception(message, cause) {
-    /** The endpoint produced a malformed URL. */
+    /**
+     * The endpoint produced a malformed URL: no `http`/`https` scheme, no host, or text that cannot
+     * be parsed. Thrown before anything is sent, and never retried.
+     *
+     * [url] is the joined base URL and path, without query items. It can contain identifiers or
+     * secrets, so the message and string form leave it out; log it only after your own redaction.
+     */
     public data class InvalidUrl(
         val url: String,
-    ) : NetworkError("Invalid URL: $url")
+    ) : NetworkError("Invalid URL") {
+        override fun toString(): String = "InvalidUrl(url=<redacted>)"
+    }
 
-    /** The response could not be interpreted as HTTP. */
+    /** The response could not be interpreted as HTTP. Reserved for parity; not currently produced. */
     public data object InvalidResponse : NetworkError("Invalid response")
 
-    /** The response body was missing or unreadable. */
+    /** The response body was missing or unreadable. Reserved for parity; not currently produced. */
     public data object InvalidData : NetworkError("Invalid data")
 
     /**

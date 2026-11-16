@@ -130,6 +130,11 @@ public final class io/github/maniramezan/kenwork/network/HttpMethod : java/lang/
 	public static fun values ()[Lio/github/maniramezan/kenwork/network/HttpMethod;
 }
 
+public final class io/github/maniramezan/kenwork/network/HttpStatusKt {
+	public static final fun isTransient (Lio/github/maniramezan/kenwork/network/NetworkError;Lkotlin/jvm/functions/Function1;)Z
+	public static synthetic fun isTransient$default (Lio/github/maniramezan/kenwork/network/NetworkError;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Z
+}
+
 public final class io/github/maniramezan/kenwork/network/KenworkLogger {
 	public static final field INSTANCE Lio/github/maniramezan/kenwork/network/KenworkLogger;
 	public final synthetic fun debug (Ljava/lang/String;Lio/github/maniramezan/kenwork/network/LogCategory;)V
@@ -202,9 +207,12 @@ public final class io/github/maniramezan/kenwork/network/NetworkClientConfigurat
 	public fun <init> ()V
 	public synthetic fun <init> (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;ILio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;JJJLio/github/maniramezan/kenwork/network/LogLevel;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lokhttp3/Cache;Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;Lio/ktor/client/engine/HttpClientEngine;Lio/github/maniramezan/kenwork/network/NetworkEventListener;)V
 	public synthetic fun <init> (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;ILio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;JJJLio/github/maniramezan/kenwork/network/LogLevel;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lokhttp3/Cache;Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;Lio/ktor/client/engine/HttpClientEngine;Lio/github/maniramezan/kenwork/network/NetworkEventListener;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun <init> (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;ILio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;JJJLio/github/maniramezan/kenwork/network/LogLevel;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lokhttp3/Cache;Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;Lio/ktor/client/engine/HttpClientEngine;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lio/github/maniramezan/kenwork/network/RequestInterceptor;Lio/github/maniramezan/kenwork/network/RequestHeaderProvider;)V
+	public synthetic fun <init> (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;ILio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;JJJLio/github/maniramezan/kenwork/network/LogLevel;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lokhttp3/Cache;Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;Lio/ktor/client/engine/HttpClientEngine;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lio/github/maniramezan/kenwork/network/RequestInterceptor;Lio/github/maniramezan/kenwork/network/RequestHeaderProvider;)V
 	public synthetic fun <init> (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;ILio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;JJJLio/github/maniramezan/kenwork/network/LogLevel;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lokhttp3/Cache;Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;Lio/ktor/client/engine/HttpClientEngine;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lio/github/maniramezan/kenwork/network/RequestInterceptor;Lio/github/maniramezan/kenwork/network/RequestHeaderProvider;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;ILio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;JJJLio/github/maniramezan/kenwork/network/LogLevel;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lokhttp3/Cache;Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;Lio/ktor/client/engine/HttpClientEngine;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lio/github/maniramezan/kenwork/network/RequestInterceptor;Lio/github/maniramezan/kenwork/network/RequestHeaderProvider;Ljava/lang/Long;Ljava/lang/Long;)V
+	public synthetic fun <init> (Lkotlinx/serialization/json/Json;Lio/github/maniramezan/kenwork/network/AuthorizationProvider;ILio/github/maniramezan/kenwork/network/RetryPolicy;Lio/github/maniramezan/kenwork/network/ReachabilityGate;JJJLio/github/maniramezan/kenwork/network/LogLevel;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lokhttp3/Cache;Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;Lio/ktor/client/engine/HttpClientEngine;Lio/github/maniramezan/kenwork/network/NetworkEventListener;Lio/github/maniramezan/kenwork/network/RequestInterceptor;Lio/github/maniramezan/kenwork/network/RequestHeaderProvider;Ljava/lang/Long;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAuthorizationProvider ()Lio/github/maniramezan/kenwork/network/AuthorizationProvider;
+	public final fun getConnectTimeoutMillis ()Ljava/lang/Long;
 	public final fun getEngine ()Lio/ktor/client/engine/HttpClientEngine;
 	public final fun getEngineInterceptors ()Ljava/util/List;
 	public final fun getEventListener ()Lio/github/maniramezan/kenwork/network/NetworkEventListener;
@@ -219,6 +227,7 @@ public final class io/github/maniramezan/kenwork/network/NetworkClientConfigurat
 	public final fun getRequestInterceptor ()Lio/github/maniramezan/kenwork/network/RequestInterceptor;
 	public final fun getRetryDelayMillis ()J
 	public final fun getRetryPolicy ()Lio/github/maniramezan/kenwork/network/RetryPolicy;
+	public final fun getSocketTimeoutMillis ()Ljava/lang/Long;
 	public final fun getSslPinning ()Lio/github/maniramezan/kenwork/network/SslPinningConfiguration;
 	public final fun getTimeoutMillis ()J
 }
@@ -241,6 +250,7 @@ public abstract interface class io/github/maniramezan/kenwork/network/NetworkEnd
 	public abstract fun getMethod ()Lio/github/maniramezan/kenwork/network/HttpMethod;
 	public abstract fun getPath ()Ljava/lang/String;
 	public fun getQueryItems ()Ljava/util/List;
+	public fun getTimeoutMillis ()Ljava/lang/Long;
 }
 
 public final class io/github/maniramezan/kenwork/network/NetworkEndpoint$DefaultImpls {
@@ -248,6 +258,7 @@ public final class io/github/maniramezan/kenwork/network/NetworkEndpoint$Default
 	public static fun getBody (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;)[B
 	public static fun getHeaders (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;)Ljava/util/Map;
 	public static fun getQueryItems (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;)Ljava/util/List;
+	public static fun getTimeoutMillis (Lio/github/maniramezan/kenwork/network/NetworkEndpoint;)Ljava/lang/Long;
 }
 
 public abstract class io/github/maniramezan/kenwork/network/NetworkError : java/lang/Exception {

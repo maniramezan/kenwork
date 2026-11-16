@@ -18,7 +18,11 @@ internal fun buildHttpClient(config: NetworkClientConfiguration): HttpClient {
     val common: HttpClientConfig<*>.() -> Unit = {
         expectSuccess = false
         install(ContentNegotiation) { json(config.json) }
-        install(HttpTimeout) { requestTimeoutMillis = config.timeoutMillis }
+        install(HttpTimeout) {
+            requestTimeoutMillis = config.timeoutMillis
+            config.connectTimeoutMillis?.let { connectTimeoutMillis = it }
+            config.socketTimeoutMillis?.let { socketTimeoutMillis = it }
+        }
         // Skip the plugin entirely when logging is off, so no pipeline interceptors are installed.
         if (config.logLevel != LogLevel.OFF) {
             install(Logging) {
