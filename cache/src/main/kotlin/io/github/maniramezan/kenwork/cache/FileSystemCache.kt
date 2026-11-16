@@ -139,6 +139,36 @@ public class FileSystemCache<V : Any>(
         changeFlow.tryEmit(CacheChange.Cleared)
     }
 
+    /**
+     * Deletes entries stored more than [maxAgeMillis] before the current time, judged by each
+     * entry's stored timestamp (not its file's last-modified time), and emits
+     * [CacheChange.Removed] for the keys this instance can map back from their hashed names.
+     *
+     * Use it to purge expired data from disk, for example from a periodic job; size-based eviction
+     * alone keeps expired files until the directory fills up. Unreadable files are left alone.
+     */
+    public suspend fun removeExpiredEntries(maxAgeMillis: Long) {
+        val expired =
+            withContext(ioContext) {
+                mutex.withLock {
+                    val now = currentTimeMillis()
+                    val removed = mutableListOf<CacheKey>()
+                    for (file in ownedFiles()) {
+                        val timestamp = runCatching { file.bufferedReader().use { it.readLine() }?.toLong() }.getOrNull()
+                        if (timestamp != null && now - timestamp > maxAgeMillis) {
+                            val size = file.length()
+                            if (file.delete()) {
+                                ownedBytes = ownedBytes?.minus(size)
+                                knownKeys.remove(file.nameWithoutExtension)?.let(removed::add)
+                            }
+                        }
+                    }
+                    removed
+                }
+            }
+        expired.forEach { changeFlow.tryEmit(CacheChange.Removed(it)) }
+    }
+
     private fun readEntry(key: CacheKey): CacheEntry<V>? {
         val file = fileFor(key)
         if (!file.exists()) return null
