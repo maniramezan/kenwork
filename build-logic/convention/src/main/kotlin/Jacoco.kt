@@ -1,6 +1,7 @@
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.register
+import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
 import java.math.BigDecimal
@@ -36,6 +37,52 @@ internal fun Project.configureJacoco() {
     val report =
         tasks.register<JacocoReport>("jacocoTestReport") {
             dependsOn("testDebugUnitTest")
+            reports {
+                xml.required.set(true)
+                html.required.set(true)
+            }
+            classDirectories.setFrom(classTree())
+            sourceDirectories.setFrom(sources)
+            executionData.setFrom(execData)
+        }
+
+    tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
+        dependsOn(report)
+        classDirectories.setFrom(classTree())
+        sourceDirectories.setFrom(sources)
+        executionData.setFrom(execData)
+        violationRules {
+            rule {
+                limit {
+                    counter = "LINE"
+                    value = "COVEREDRATIO"
+                    minimum = MIN_COVERAGE
+                }
+            }
+        }
+    }
+
+    tasks.named("check") { dependsOn("jacocoCoverageVerification") }
+}
+
+/**
+ * The KMP equivalent of [configureJacoco]: measures `jvmTest` against the JVM target's classes,
+ * which are compiled from `commonMain` and `jvmMain`. Code only in `androidMain` is not counted.
+ */
+internal fun Project.configureKmpJacoco() {
+    pluginManager.apply("jacoco")
+
+    fun classTree() =
+        fileTree(layout.buildDirectory.dir("classes/kotlin/jvm/main")) {
+            exclude(COVERAGE_EXCLUSIONS)
+        }
+
+    val execData = layout.buildDirectory.file("jacoco/jvmTest.exec")
+    val sources = files("src/commonMain/kotlin", "src/jvmMain/kotlin")
+
+    val report =
+        tasks.register<JacocoReport>("jacocoTestReport") {
+            dependsOn(tasks.named("jvmTest", Test::class.java))
             reports {
                 xml.required.set(true)
                 html.required.set(true)

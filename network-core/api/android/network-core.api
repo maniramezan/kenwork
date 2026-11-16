@@ -1,0 +1,9 @@
+public final class io/github/maniramezan/kenwork/core/KenworkHttpClient {
+	public static final field INSTANCE Lio/github/maniramezan/kenwork/core/KenworkHttpClient;
+	public final fun create (Lio/ktor/client/engine/HttpClientEngine;Lkotlinx/serialization/json/Json;Z)Lio/ktor/client/HttpClient;
+	public final fun create (Lio/ktor/client/engine/HttpClientEngineFactory;Lkotlinx/serialization/json/Json;Z)Lio/ktor/client/HttpClient;
+	public static synthetic fun create$default (Lio/github/maniramezan/kenwork/core/KenworkHttpClient;Lio/ktor/client/engine/HttpClientEngine;Lkotlinx/serialization/json/Json;ZILjava/lang/Object;)Lio/ktor/client/HttpClient;
+	public static synthetic fun create$default (Lio/github/maniramezan/kenwork/core/KenworkHttpClient;Lio/ktor/client/engine/HttpClientEngineFactory;Lkotlinx/serialization/json/Json;ZILjava/lang/Object;)Lio/ktor/client/HttpClient;
+	public final fun getDefaultJson ()Lkotlinx/serialization/json/Json;
+}
+

@@ -44,11 +44,11 @@ tasks.register("apiDump") {
     description = "Dumps public API declarations for all published modules"
     dependsOn(
         ":network-core:apiDump",
-        ":cache:releaseApiDump",
-        ":mutations:releaseApiDump",
-        ":network:releaseApiDump",
-        ":repository:releaseApiDump",
-        ":testing:releaseApiDump",
+        ":cache:apiDump",
+        ":mutations:apiDump",
+        ":network:apiDump",
+        ":repository:apiDump",
+        ":testing:apiDump",
     )
 }
 
@@ -58,11 +58,11 @@ val apiCheckTask =
         description = "Verifies public API declarations for all published modules against golden files"
         dependsOn(
             ":network-core:apiCheck",
-            ":cache:releaseApiCheck",
-            ":mutations:releaseApiCheck",
-            ":network:releaseApiCheck",
-            ":repository:releaseApiCheck",
-            ":testing:releaseApiCheck",
+            ":cache:apiCheck",
+            ":mutations:apiCheck",
+            ":network:apiCheck",
+            ":repository:apiCheck",
+            ":testing:apiCheck",
         )
     }
 
@@ -87,6 +87,9 @@ subprojects {
 
     extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
         buildUponDefaultConfig = true
+        // Detekt's defaults only cover src/main and src/test; KMP modules keep code in per-target
+        // source sets (commonMain, androidMain, jvmTest, ...).
+        source.setFrom(fileTree("src") { include("**/kotlin/**") })
         config.setFrom(rootProject.files("config/detekt/detekt.yml"))
         parallel = true
     }
@@ -95,10 +98,11 @@ subprojects {
         jvmTarget = "17"
     }
 
-    // Every published Android library gets API docs (Dokka) and Maven Central
-    // publishing (vanniktech, configured from the root gradle.properties POM_* keys).
-    // Two plugin IDs cover this: the legacy Android library plugin, and the newer
-    // Android multiplatform library plugin used by KMP modules like network-core.
+    // Every published library gets API docs (Dokka) and Maven Central publishing (vanniktech,
+    // configured from the root gradle.properties POM_* keys). Two plugin IDs cover this: the
+    // legacy Android library plugin, and the Android multiplatform library plugin used by the
+    // published KMP modules. The BCV bridge adds an ABI dump for the Android target, which BCV
+    // itself does not see for either plugin.
     // :samples is an Android library for build purposes only and is never published.
     if (name == "samples") return@subprojects
     pluginManager.withPlugin("com.android.library") {
@@ -109,5 +113,6 @@ subprojects {
     pluginManager.withPlugin("com.android.kotlin.multiplatform.library") {
         pluginManager.apply("org.jetbrains.dokka")
         pluginManager.apply("com.vanniktech.maven.publish")
+        pluginManager.apply("io.github.tjokinen.android-bcv-bridge")
     }
 }

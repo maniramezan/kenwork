@@ -45,6 +45,47 @@ Endpoints that return no meaningful body (e.g. `204 No Content`) can be requeste
 val done: EmptyResponse = client.request(DeleteVideo(id = 42))
 ```
 
+To send pre-encoded bytes instead of a JSON value, set `body` on the endpoint and give it a
+`Content-Type` header (without one it is sent as `application/octet-stream`). A typed body passed
+to `request` takes precedence over `endpoint.body`.
+
+```kotlin
+data class UploadCsv(val csv: ByteArray) : NetworkEndpoint {
+    override val baseUrl = "https://api.example.com"
+    override val path = "v1/imports"
+    override val method = HttpMethod.PUT
+    override val headers = mapOf("Content-Type" to "text/csv")
+    override val body = csv
+}
+
+client.execute(UploadCsv(file.readBytes()))
+```
+
+The whole body is held in memory; streaming and multipart uploads are not supported yet.
+
+## Timeouts and the OkHttp engine
+
+`timeoutMillis` (default 30 s) bounds each request as a whole. OkHttp's own
+connect and read timeouts (10 s each by default) apply underneath it; change them, or anything else
+on the builder, with `okHttpConfig`. `engineInterceptors` adds OkHttp interceptors (for example a
+traffic recorder in debug builds).
+
+```kotlin
+val client = NetworkClient(NetworkClientConfiguration(
+    timeoutMillis = 60_000,
+    okHttpConfig = {
+        connectTimeout(5, TimeUnit.SECONDS)
+        readTimeout(30, TimeUnit.SECONDS)
+    },
+    engineInterceptors = if (BuildConfig.DEBUG) listOf(debugRecorder) else emptyList(),
+))
+```
+
+`okHttpConfig`, `engineInterceptors`, `okHttpCache`, and `sslPinning` apply only to the built-in
+OkHttp engine. They are ignored when you pass `engine`. Client timeouts default to whole-request
+`timeoutMillis`, with optional `connectTimeoutMillis` and `socketTimeoutMillis`; individual endpoints
+can override the request timeout via `NetworkEndpoint.timeoutMillis`.
+
 ## Client lifecycle
 
 Create one `NetworkClient` per credential scope and reuse it. Swapping configuration (e.g. a new
@@ -129,7 +170,29 @@ val disk = FileSystemCache(
 
 // Two-tier: memory over the disk cache, promoting hits with their original timestamp.
 val layered = LayeredCache(memory = InMemoryCache<Video>(maxSize = 100), persistent = disk)
+
+// Drop entries older than an hour, e.g. from a periodic job. Observers get CacheChange.Removed.
+// Supported on both InMemoryCache and FileSystemCache:
+memoryCache.removeExpiredEntries(maxAgeMillis = 60 * 60 * 1000L)
+disk.removeExpiredEntries(maxAgeMillis = 24 * 60 * 60 * 1000L)
 ```
+
+A repository using `CachePolicy.ReturnCacheIfNotExpired` skips expired entries on read and reloads.
+
+### HTTP caching (`Cache-Control` / `ETag`)
+
+The caches above store decoded values for repositories. Separately, OkHttp can cache raw HTTP
+responses and revalidate them with the server (`304 Not Modified`) by honoring the server's
+`Cache-Control` and `ETag` headers:
+
+```kotlin
+val client = NetworkClient(NetworkClientConfiguration(
+    okHttpCache = okhttp3.Cache(File(context.cacheDir, "http"), 10L * 1024 * 1024),
+))
+```
+
+This only helps when the server sends caching headers, and only on the built-in OkHttp engine.
+Responses for authenticated requests are stored on disk; see [security.md](security.md).
 
 ## Retry policy
 
@@ -302,9 +365,42 @@ queue.restore()   // replays whatever didn't finish before the process died
 restore, and cancellation serialize queue admission with persistence so a concurrent operation
 cannot replay a cancelled snapshot afterwards.
 
-`InMemoryMutationStore` is the shipped default; implement `MutationStore` (three suspend
-functions: `save`/`remove`/`loadAll` over the fully-`@Serializable` `MutationRecord`) against
-SQLDelight/Room/DataStore for real durability.
+`InMemoryMutationStore` is the default in-process store and does not survive process death. For
+durability across app restarts, `:mutations` ships `FileMutationStore`:
+
+```kotlin
+val store = FileMutationStore(file = File(context.filesDir, "kenwork/mutations.json"))
+val queue = MutationQueue(apiClient = client, scope = appScope, store = store, codecs = listOf(SetLikeStateCodec))
+```
+
+`FileMutationStore` caches loaded records in memory, performs atomic file replacements on every write,
+and provides a `clear()` method to purge persisted records on sign-out. For databases (e.g. Room or SQLDelight),
+implement `MutationStore` directly (three suspend functions over the `@Serializable` `MutationRecord`).
+
+Keep the file in app-private storage, and delete it on sign-out (see below). Records hold
+whatever your codec encodes, so never put credentials in a payload.
+
+## Sign-out checklist
+
+Account-scoped state lives in several objects. On sign-out, in this order:
+
+```kotlin
+// 1. Stop background work so nothing runs with the old account. MutationQueue runs on your scope.
+mutationScope.cancel()
+// 2. Fail any pending or later token refresh instead of minting a token for the old account.
+oauthProvider.close()
+// 3. Stop new requests; in-flight ones finish first.
+client.close()
+repository.close()                 // only cancels a scope the repository created itself
+// 4. Remove account data at rest.
+layeredCache.removeAll()           // clears memory and disk; streamOrNull observers get null
+fileMutationStore.clear()          // your durable store: drop records queued for the old account
+okHttpCache?.evictAll()            // if you enabled HTTP caching
+```
+
+Then build a fresh client, provider, queue, and repository for the next account. Reusing cache
+directories is fine once they are cleared; namespacing them by account ID avoids the question.
+See [security.md](security.md) for the reasoning behind each step.
 
 ## SSL pinning
 
@@ -342,12 +438,21 @@ val client = NetworkClient(NetworkClientConfiguration(
 ))
 ```
 
+A listener runs synchronously on the request's coroutine, so keep it fast and hand heavy work
+off. If it throws, the exception is logged and dropped; the request's result is unaffected.
+
 ## Logging
 
 ```kotlin
 KenworkLogger.level = LogLevel.DEBUG
 KenworkLogger.sink = LogSink { level, category, message, t -> Timber.log(/* ... */) }
 ```
+
+To also log each HTTP request, set the client's `logLevel` to `INFO` (request and response lines)
+or `DEBUG` (adds headers and bodies). Those lines are emitted at debug level, so they appear only
+when `KenworkLogger.level` is `DEBUG` too. The default client `logLevel` (`WARNING`) installs no
+request logger at all. Bodies can contain credentials and personal data; keep this off in release
+builds.
 
 ## OpenTelemetry
 
