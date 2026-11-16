@@ -12,11 +12,11 @@ Central, so **every public signature is a compatibility promise** (see "Public A
 | Module | Kind | Depends on | Notes |
 |---|---|---|---|
 | `network-core` | KMP (Android, JVM, iOS) | Ktor core | Tiny shared client policy; independent of the stack below |
-| `network` | Android library | Ktor + OkHttp | Endpoints, `NetworkClient`, auth, retry, errors, logging, telemetry |
-| `cache` | Android library | coroutines | `InMemoryCache`, `FileSystemCache`, `LayeredCache`, `CachePolicy` |
-| `repository` | Android library | `network`, `cache` | `GenericRepository` (single-flight loads, reactive streams) |
-| `mutations` | Android library | `network` | `MutationQueue` (coalescing, retry, persistence) |
-| `testing` | Android library | `network`, `cache` | Published test doubles for consumers |
+| `network` | KMP (Android, JVM) | Ktor + OkHttp | Endpoints, `NetworkClient`, auth, retry, errors, logging, telemetry |
+| `cache` | KMP (Android, JVM) | coroutines | `InMemoryCache`, `FileSystemCache`, `LayeredCache`, `CachePolicy` |
+| `repository` | KMP (Android, JVM) | `network`, `cache` | `GenericRepository` (single-flight loads, reactive streams) |
+| `mutations` | KMP (Android, JVM) | `network` | `MutationQueue` (coalescing, retry, persistence) |
+| `testing` | KMP (Android, JVM) | `network`, `cache` | Published test doubles for consumers |
 | `samples` | Android library, **not published** | all of the above | Test-verified usage examples |
 
 Dependency direction is strict: `network` never depends on `cache`/`repository`; `cache` depends on
@@ -38,8 +38,9 @@ Android SDK with compileSdk 37 (set `ANDROID_HOME` or `local.properties`).
 
 ```bash
 ./gradlew check                     # unit tests, detekt, ktlint, Android lint, JaCoCo gate (70% lines)
-./gradlew :cache:testDebugUnitTest  # one module's tests
-./gradlew :network:testDebugUnitTest --tests '*RetryPolicyTest*'
+./gradlew :cache:jvmTest            # one module's tests
+./gradlew :network:jvmTest --tests '*RetryPolicyTest*'
+./gradlew :network:testAndroidHostTest  # Android-only code (Robolectric)
 ./gradlew ktlintFormat              # auto-fix formatting
 ./gradlew dokkaGenerate             # API docs → build/dokka/html
 ./gradlew :network-core:jvmTest     # KMP core on the JVM (iOS tests need macOS: iosSimulatorArm64Test)
@@ -71,7 +72,7 @@ pushing; use the `verify-changes` skill for the full checklist.
 
 ## Public API rules (binary compatibility)
 
-Consumers upgrade the AAR without recompiling their dependents, so a change that is
+Consumers upgrade the AAR/JAR without recompiling their dependents, so a change that is
 source-compatible can still be **binary-incompatible**. Before touching anything public, use the
 `evolve-public-api` skill. In short:
 
@@ -96,8 +97,10 @@ source-compatible can still be **binary-incompatible**. Before touching anything
 - Fix a bug by writing the failing test first, then confirm it fails on the old code.
 - `:mutations` tests: settle background work with the `settle()` helper, not a bare
   `advanceUntilIdle()` (see its KDoc for why).
-- `NetworkMonitor` is covered with Robolectric; other tests are plain JVM
-  (`isReturnDefaultValues = true` stubs `android.util.Log`).
+- Source layout for the KMP modules (`kenwork.kmp.library` convention plugin): shared code in
+  `src/commonMain` (JDK APIs are fine there; Android and JVM are the only targets), Android SDK code
+  in `src/androidMain`, tests in `src/jvmTest`. Only `NetworkMonitor` and `AndroidLogSink` need the
+  Android SDK; they are tested in `src/androidHostTest` with Robolectric.
 
 ## Adding things
 

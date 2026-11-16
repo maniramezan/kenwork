@@ -15,7 +15,7 @@ description: Run and interpret kenwork's pre-push checks (tests, detekt, ktlint,
 Faster loops while iterating:
 
 ```bash
-./gradlew :<module>:testDebugUnitTest --tests '*SomeTest*'
+./gradlew :<module>:jvmTest --tests '*SomeTest*'   # :samples uses testDebugUnitTest
 ./gradlew ktlintFormat                       # then re-run ktlintCheck
 ./gradlew :<module>:detekt
 ./gradlew :network-core:jvmTest              # KMP core; iOS needs macOS: :network-core:iosSimulatorArm64Test

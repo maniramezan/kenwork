@@ -1,15 +1,11 @@
 plugins {
-    alias(libs.plugins.kenwork.android.library)
+    alias(libs.plugins.kenwork.kmp.library)
 }
 
-android {
-    namespace = "io.github.maniramezan.kenwork.cache"
-}
-
-dependencies {
-    api(libs.kotlinx.coroutines.core)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlin.test.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            api(libs.kotlinx.coroutines.core)
+        }
+    }
 }

@@ -40,7 +40,7 @@ jobs:
         with:
           distribution: temurin
           # The Gradle daemon is pinned to JDK 21 (gradle/gradle-daemon-jvm.properties);
-          # Robolectric instrumenting against SDK 36 also requires it.
+          # Robolectric instrumenting against SDK 37 also requires it.
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
 
