@@ -13,7 +13,7 @@ free (plain constructors + a `Configuration` object).
 | Artifact | What it provides |
 |---|---|
 | `io.github.maniramezan.kenwork:network-core` | KMP `KenworkHttpClient` policy for Android, JVM/Desktop, and iOS with a consumer-supplied Ktor engine |
-| `io.github.maniramezan.kenwork:network` | `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `RetryPolicy`/`DefaultRetryPolicy`, `NetworkError`, `NetworkMonitor`/`ReachabilityGate`, `SslPinningConfiguration`, `KenworkLogger`, `NetworkEventListener` |
+| `io.github.maniramezan.kenwork:network` | Android + JVM: `NetworkEndpoint`, `NetworkClient`, `AuthorizationProvider`/`OAuthAuthorizationProvider`, `RetryPolicy`/`DefaultRetryPolicy`, `NetworkError`, `NetworkMonitor`/`ReachabilityGate`, `SslPinningConfiguration`, `KenworkLogger`, `NetworkEventListener` |
 | `io.github.maniramezan.kenwork:cache` | `Cache`/`TimestampedCache`/`PersistentCache`, `InMemoryCache`, `FileSystemCache`, `LayeredCache`, `CachePolicy`, `CacheKey`, `CacheChange` |
 | `io.github.maniramezan.kenwork:repository` | `Repository`/`GenericRepository` (with `fetch` + reactive `stream`), `LocalDataSource`/`CacheBasedLocalDataSource` |
 | `io.github.maniramezan.kenwork:mutations` | `MutationQueue`, coalescing, retry, observable status, and a pluggable `MutationStore` (in-memory by default) |
@@ -33,12 +33,12 @@ dependencies {
 }
 ```
 
-`network-core` targets Android (minimum SDK 26), JVM/Desktop (JDK 17 bytecode), and iOS device and
-Apple Silicon simulator. The established `network`, cache, repository, mutations, and testing
-artifacts remain Android libraries published as AARs; JVM/Desktop consumers use `network-core`.
+`network`, `cache`, `repository`, `mutations`, and `testing` target Android (minimum SDK 26) and
+JVM/Desktop (JDK 17 bytecode); Gradle picks the right artifact for each. Only `NetworkMonitor`
+is Android-specific. `network-core` additionally targets iOS device and Apple Silicon simulator.
 
-Choose `network-core` for shared KMP code, or `network` for the Android endpoint/auth/retry stack;
-neither depends on the other. In a KMP build, put `network-core` in `commonMain.dependencies` and
+Choose `network-core` for shared KMP code that includes iOS, or `network` for the endpoint/auth/retry
+stack on Android and the desktop JVM; neither depends on the other. In a KMP build, put `network-core` in `commonMain.dependencies` and
 your Ktor engine dependency in the appropriate platform source set. See the
 [module boundaries and engine ownership guide](docs/platforms.md).
 
@@ -90,14 +90,25 @@ A `401` automatically triggers a single coalesced token refresh and one retry.
 - **Reachability-aware retry** — give the client a `ReachabilityGate` (e.g.
   `networkMonitor.asReachabilityGate()`) and retries park while offline, resuming when the network
   returns instead of burning attempts.
+- `withRetryPolicy { }` swaps the retry policy for a block of calls, for callers that run their own
+  retry loop.
 - Closed `NetworkError` set (`Unauthorized`, `Forbidden`, `NotFound`, `ServerError`, `Timeout`,
   `NoInternetConnection`, `DecodingFailed`, …).
 - Caching: `InMemoryCache` (LRU + expiry), **`FileSystemCache`** (durable `PersistentCache`),
   `LayeredCache` (memory + persistent with timestamp promotion), `CachePolicy`.
 - `GenericRepository` coordinating network + cache with write-through, **single-flight** load
-  coalescing, and a **reactive `stream()`** that re-emits on cache changes (offline-first).
+  coalescing, and a **reactive `stream()`** that re-emits on cache changes (offline-first), plus
+  `streamOrNull()` for UIs that must clear on removal or sign-out.
+- **Background mutations** — `MutationQueue` sends likes, follows, and similar writes in the
+  background with per-key coalescing, retry, observable status, cancellation, and optional
+  persistence across process death (`MutationCodec` + your `MutationStore`).
 - `NetworkMonitor` connectivity (`StateFlow`), OkHttp `SslPinningConfiguration`, `KenworkLogger`,
   and a `NetworkEventListener` telemetry hook (with per-attempt retry events).
+- **Observability hooks** with no OpenTelemetry dependency: `RequestInterceptor` (a span per
+  attempt), `RequestHeaderProvider` (trace propagation headers), and `StructuredLogSink`
+  (structured log attributes).
+- A published `:testing` artifact: `mockNetworkClient`, `FakeApiClient`, and recording doubles for
+  retry, telemetry, and logs.
 
 ## Samples
 
@@ -123,7 +134,7 @@ with the `:testing` fakes, so the samples can't drift from the API. The module i
 - [docs/graphql.md](docs/graphql.md) — GraphQL transport and application-error handling.
 - [docs/parity.md](docs/parity.md) — SwiftyNetwork ↔ kenwork mapping.
 - [docs/release.md](docs/release.md) — how releases reach Maven Central.
-- API reference (Dokka): published to GitHub Pages on pushes to `main`.
+- [API reference](https://maniramezan.github.io/kenwork/) (Dokka), published on every push to `main`.
 
 ## License
 

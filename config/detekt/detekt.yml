@@ -26,3 +26,18 @@ style:
     ignoreNumbers: ['-1', '0', '1', '2', '100', '200', '299', '400', '401', '403', '404', '500']
   MaxLineLength:
     maxLineLength: 140
+
+naming:
+  FunctionNaming:
+    # Detekt's default test excludes predate AGP's KMP `androidHostTest` source set, whose tests use
+    # the same backticked sentence names as every other test source set.
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidHostTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'

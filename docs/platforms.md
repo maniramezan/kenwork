@@ -3,16 +3,30 @@
 | Module | Published platform surface | Responsibilities |
 |---|---|---|
 | `network-core` | Android, JVM/Desktop, iOS arm64 device and simulator | Ktor JSON and redirect policy |
-| `network` | Android library (AAR) | Typed endpoints, OAuth, retries, errors, connectivity, OkHttp integration |
-| `cache` | Android library (AAR) | Memory and filesystem storage, layered caching |
-| `repository` | Android library (AAR) | Network/cache coordination and reactive reads |
-| `mutations` | Android library (AAR) | Coalesced background writes and pluggable persistence |
-| `testing` | Android library (AAR) | Test doubles for the endpoint client |
+| `network` | Android (AAR), JVM/Desktop (JAR) | Typed endpoints, OAuth, retries, errors, OkHttp integration; connectivity (`NetworkMonitor`) on Android only |
+| `cache` | Android (AAR), JVM/Desktop (JAR) | Memory and filesystem storage, layered caching |
+| `repository` | Android (AAR), JVM/Desktop (JAR) | Network/cache coordination and reactive reads |
+| `mutations` | Android (AAR), JVM/Desktop (JAR) | Coalesced background writes and pluggable persistence |
+| `testing` | Android (AAR), JVM/Desktop (JAR) | Test doubles for the endpoint client |
 
-The established modules use JVM APIs internally but do not publish standalone JVM variants.
-Use `network-core` for Desktop dependencies. It does not export the Android stack to iOS or
-provide a Swift package/framework. Sharing DTOs and domain logic in a consuming KMP module does
-not require moving Android connectivity or disk storage into common code.
+## Android and the desktop JVM
+
+`network`, `cache`, `repository`, `mutations`, and `testing` are published for both Android and
+the desktop JVM (JDK 17 bytecode) from one shared source set. Depend on the plain coordinates
+(for example `io.github.maniramezan.kenwork:network`); Gradle picks `network-android` or
+`network-jvm` from the published module metadata. Build tools that ignore Gradle module metadata
+must name the platform artifact directly.
+
+The two platforms differ only where the Android SDK is involved:
+
+- `NetworkMonitor` and `AndroidLogSink` exist on Android only. On the desktop JVM, implement
+  `ReachabilityGate` over your own connectivity signal if you want reachability-aware retries.
+- `KenworkLogger` defaults to Logcat on Android and to `java.util.logging` (loggers named
+  `kenwork.<category>`) on the desktop JVM.
+
+These modules do not target iOS. Use `network-core` there; it does not export the Android stack to
+iOS or provide a Swift package/framework. Sharing DTOs and domain logic in a consuming KMP module
+does not require moving Android connectivity or disk storage into common code.
 
 ## KMP client construction
 
