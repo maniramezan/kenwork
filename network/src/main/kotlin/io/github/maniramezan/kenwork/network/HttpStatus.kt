@@ -18,10 +18,11 @@ internal object HttpStatus {
 
 /**
  * Whether this failure is transient — a timeout, lost connectivity, or a [NetworkError.ServerError]
- * whose status satisfies [isRetryableStatus]. Shared by [DefaultRetryPolicy] and telemetry so the
- * two can't disagree about what "retryable" means.
+ * whose status satisfies [isRetryableStatus] (by default `429` or any `5xx`). Shared by
+ * [DefaultRetryPolicy], telemetry ([NetworkEvent.isRetryable]), and repositories serving stale data,
+ * so they can't disagree about what "transient" means. Use it for the same decision in app code.
  */
-internal fun NetworkError.isTransient(isRetryableStatus: (Int) -> Boolean = HttpStatus::isDefaultRetryable): Boolean =
+public fun NetworkError.isTransient(isRetryableStatus: (Int) -> Boolean = HttpStatus::isDefaultRetryable): Boolean =
     when (this) {
         NetworkError.Timeout, NetworkError.NoInternetConnection -> true
         is NetworkError.ServerError -> isRetryableStatus(statusCode)

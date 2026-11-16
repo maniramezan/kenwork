@@ -24,6 +24,7 @@ class TestEndpoint(
     override val headers: Map<String, String>? = null,
     override val authorization: AuthorizationType = AuthorizationType.None,
     override val body: ByteArray? = null,
+    override val timeoutMillis: Long? = null,
 ) : NetworkEndpoint
 
 class TestAuthProvider(
