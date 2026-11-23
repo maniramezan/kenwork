@@ -67,6 +67,15 @@ public sealed class NetworkError(
     /** A 401 was received and the authorization provider could not refresh the credential. */
     public data object AuthorizationRefreshFailed : NetworkError("Authorization refresh failed")
 
+    /**
+     * The [AuthorizationProvider] could not supply authorization, so the request was not sent.
+     * [cause] is what [AuthorizationProvider.currentAuthorization] threw. Never retried by
+     * [DefaultRetryPolicy] unless [cause] is a lost connection or timeout (see [isTransient]).
+     */
+    public class AuthorizationUnavailable(
+        cause: Throwable,
+    ) : NetworkError("Authorization unavailable", cause)
+
     /** Any other transport-level failure. */
     public class Underlying(
         cause: Throwable,

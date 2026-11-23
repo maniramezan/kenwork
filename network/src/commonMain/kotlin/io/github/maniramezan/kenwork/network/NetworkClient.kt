@@ -197,7 +197,7 @@ public class NetworkClient(
             val auth =
                 endpoint.authorization
                     .takeUnless { it == AuthorizationType.None }
-                    ?: provider?.currentAuthorization()
+                    ?: provider?.authorizationOrFail()
                     ?: AuthorizationType.None
             val response = performCall(client, endpoint, body, bodyType, auth, attempt, config.requestHeaderProvider)
             if (response.status != HttpStatusCode.Unauthorized) return response
@@ -210,6 +210,22 @@ public class NetworkClient(
             if (config.retryDelayMillis > 0) delay(config.retryDelayMillis)
         }
     }
+
+    /**
+     * Asks the provider for authorization. A provider that cannot supply any throws; sending the
+     * request without credentials would only be rejected, or served as an anonymous caller, so the
+     * request fails with [NetworkError.AuthorizationUnavailable] before anything is sent.
+     */
+    private suspend fun AuthorizationProvider.authorizationOrFail(): AuthorizationType =
+        try {
+            currentAuthorization()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (
+            @Suppress("TooGenericExceptionCaught") error: Exception,
+        ) {
+            throw NetworkError.AuthorizationUnavailable(error)
+        }
 
     private suspend fun performCall(
         client: HttpClient,

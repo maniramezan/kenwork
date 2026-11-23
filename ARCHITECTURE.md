@@ -153,6 +153,15 @@ under that mutex. A late rejection of an already-replaced token reuses the new c
 starting another refresh; it still joins a refresh that is currently in flight. Custom providers
 retain their existing `refreshAuthorizationIfNeeded()` contract.
 
+### Authorization the provider cannot supply
+
+A provider that has no usable credential throws from `currentAuthorization()`. `NetworkClient` then
+fails the request with `NetworkError.AuthorizationUnavailable` carrying that error, without sending
+it, and lets a `CancellationException` through unchanged. `AuthorizationType.None` stays reserved for
+requests that need no credential. Before this, a provider that returned `None` because it had nothing
+to send let the request go out anonymously, so the server saw a signed-out caller instead of the
+client reporting the real problem.
+
 ### 401 refresh-and-retry
 
 `NetworkClient` resolves authorization (endpoint-level first, else the provider), sends the

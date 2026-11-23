@@ -20,7 +20,15 @@ import kotlinx.coroutines.withContext
  * Mirrors SwiftyNetwork's `AuthorizationProvider`.
  */
 public interface AuthorizationProvider {
-    /** The authorization to attach to the next request. */
+    /**
+     * The authorization to attach to the next request.
+     *
+     * Throw when no usable authorization exists, for example when the user is signed out or a
+     * token could not be minted. [NetworkClient] then fails the request with
+     * [NetworkError.AuthorizationUnavailable] without sending it, except that a
+     * [kotlinx.coroutines.CancellationException] propagates unchanged. Return
+     * [AuthorizationType.None] only when the request needs no credential.
+     */
     public suspend fun currentAuthorization(): AuthorizationType
 
     /**

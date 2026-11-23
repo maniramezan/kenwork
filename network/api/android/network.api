@@ -273,6 +273,10 @@ public final class io/github/maniramezan/kenwork/network/NetworkError$Authorizat
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/maniramezan/kenwork/network/NetworkError$AuthorizationUnavailable : io/github/maniramezan/kenwork/network/NetworkError {
+	public fun <init> (Ljava/lang/Throwable;)V
+}
+
 public final class io/github/maniramezan/kenwork/network/NetworkError$DecodingFailed : io/github/maniramezan/kenwork/network/NetworkError {
 	public fun <init> (Ljava/lang/Throwable;)V
 }
