@@ -15,11 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -35,5 +32,14 @@ jobs:
         with:
           path: build/dokka/html
 
+  # Deploy runs as its own job so "Re-run failed jobs" redeploys the existing artifact
+  # instead of uploading a second "github-pages" artifact, which deploy-pages rejects.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
