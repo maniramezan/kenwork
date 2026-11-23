@@ -9,7 +9,7 @@ for the parity tests in `:network`, `:cache`, and `:repository`.
 | HTTP methods | `HTTPMethod` | `HttpMethod` |
 | Endpoint | `NetworkEndpoint` protocol | `NetworkEndpoint` interface |
 | Authorization kinds | `AuthorizationType` | `AuthorizationType` (sealed) |
-| Auth provider | `AuthorizationProvider` | `AuthorizationProvider` |
+| Auth provider | `AuthorizationProvider` (throwing `currentAuthorization()` → `authorizationUnavailable(underlying:)`) | `AuthorizationProvider` (throwing `currentAuthorization()` → `NetworkError.AuthorizationUnavailable`) |
 | OAuth provider | `OAuthAuthorizationProvider` (actor) | `OAuthAuthorizationProvider` (`Mutex` + `Deferred`) |
 | Client | `NetworkClient` (actor) | `NetworkClient` (`Mutex`-guarded) |
 | Client config | `NetworkClientConfiguration` | `NetworkClientConfiguration` |
