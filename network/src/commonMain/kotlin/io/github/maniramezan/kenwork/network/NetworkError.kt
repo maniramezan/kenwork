@@ -70,7 +70,7 @@ public sealed class NetworkError(
     /**
      * The [AuthorizationProvider] could not supply authorization, so the request was not sent.
      * [cause] is what [AuthorizationProvider.currentAuthorization] threw. Never retried by
-     * [DefaultRetryPolicy].
+     * [DefaultRetryPolicy] unless [cause] is a lost connection or timeout (see [isTransient]).
      */
     public class AuthorizationUnavailable(
         cause: Throwable,

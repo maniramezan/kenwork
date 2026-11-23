@@ -21,10 +21,28 @@ internal object HttpStatus {
  * whose status satisfies [isRetryableStatus] (by default `429` or any `5xx`). Shared by
  * [DefaultRetryPolicy], telemetry ([NetworkEvent.isRetryable]), and repositories serving stale data,
  * so they can't disagree about what "transient" means. Use it for the same decision in app code.
+ *
+ * A [NetworkError.AuthorizationUnavailable] is transient when the provider failed only because the
+ * device lost connectivity: its cause, or a cause further down the chain, is a timeout or lost
+ * connection. Anything else means the user has no usable credential, which retrying cannot fix.
  */
 public fun NetworkError.isTransient(isRetryableStatus: (Int) -> Boolean = HttpStatus::isDefaultRetryable): Boolean =
     when (this) {
         NetworkError.Timeout, NetworkError.NoInternetConnection -> true
         is NetworkError.ServerError -> isRetryableStatus(statusCode)
+        is NetworkError.AuthorizationUnavailable -> cause?.transportFailure() != null
         else -> false
     }
+
+/** Bounds the cause walk so a cyclic chain cannot loop forever. */
+private const val MAX_CAUSE_DEPTH = 8
+
+/**
+ * The transient transport failure behind this throwable, if any: itself or a cause further down the
+ * chain that maps to [NetworkError.Timeout] or [NetworkError.NoInternetConnection].
+ */
+internal fun Throwable.transportFailure(): NetworkError? =
+    generateSequence(this) { it.cause?.takeUnless { cause -> cause === it } }
+        .take(MAX_CAUSE_DEPTH)
+        .map { it.toNetworkError() }
+        .firstOrNull { it == NetworkError.Timeout || it == NetworkError.NoInternetConnection }

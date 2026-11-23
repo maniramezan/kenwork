@@ -3,12 +3,15 @@ package io.github.maniramezan.kenwork.network
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class AuthorizationUnavailableTest {
     private class ThrowingProvider(
@@ -75,10 +78,32 @@ class AuthorizationUnavailableTest {
         }
 
     @Test
-    fun `is not transient, so the default policy does not retry it`() {
+    fun `a revoked or missing credential is not transient, so the default policy does not retry it`() {
         val error = NetworkError.AuthorizationUnavailable(IllegalStateException("revoked"))
         assertFalse(error.isTransient())
         assertNull(DefaultRetryPolicy(maxRetries = 3).retryDelayMillis(1, HttpMethod.GET, error))
+    }
+
+    @Test
+    fun `a provider that failed because the device is offline is transient`() {
+        assertTrue(NetworkError.AuthorizationUnavailable(UnknownHostException("auth.example.com")).isTransient())
+        assertTrue(NetworkError.AuthorizationUnavailable(NetworkError.NoInternetConnection).isTransient())
+    }
+
+    @Test
+    fun `a connectivity failure wrapped inside an SDK exception is found through the cause chain`() {
+        val sdkError = IllegalStateException("token refresh failed", SocketTimeoutException("timed out"))
+        assertTrue(NetworkError.AuthorizationUnavailable(sdkError).isTransient())
+    }
+
+    @Test
+    fun `a cyclic cause chain stops instead of looping`() {
+        val cyclic = CyclicException()
+        assertFalse(NetworkError.AuthorizationUnavailable(cyclic).isTransient())
+    }
+
+    private class CyclicException : Exception("cyclic") {
+        override val cause: Throwable get() = this
     }
 
     @Test
