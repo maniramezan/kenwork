@@ -1,5 +1,5 @@
 [versions]
-agp = "9.5.1"
+agp = "9.5.2"
 kotlin = "2.4.21"
 binaryCompatibilityValidator = "0.18.2"
 androidBcvBridge = "0.2.0"
@@ -14,7 +14,7 @@ dokka = "2.3.0"
 junit = "4.13.2"
 ktlint = "14.2.0"
 mavenPublish = "0.37.0"
-robolectric = "4.17"
+robolectric = "4.18.1"
 turbine = "1.2.1"
 opentelemetry = "1.68.0"
 
